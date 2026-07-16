@@ -31,7 +31,9 @@ def compute(agent_id: str, roster=None) -> dict | None:
         return None
 
     months = load_all_snapshots(paths.snapshots_dir(agent_id))
-    k = build_dashboard_data(months, roster).get("kpis", {})
+    data = build_dashboard_data(months, roster)
+    k = data.get("kpis", {})
+    mom = data.get("mom_df")
 
     policies = int(k.get("Total Active Policies", 0) or 0)
     members = int(k.get("Total Members", 0) or 0)
@@ -56,4 +58,5 @@ def compute(agent_id: str, roster=None) -> dict | None:
         "comm_annual": monthly * 12,
         "per_policy": (monthly / policies) if policies else 0.0,
         "history_months": len(months),
+        "mom": mom,
     }

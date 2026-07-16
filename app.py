@@ -7,15 +7,14 @@ Phase 2: in-app upload (HealthSherpa builds the book; carriers stored for reconc
 import pandas as pd
 import streamlit as st
 
-from core import dashboard_kpis, ingest_service, paths, tenants, views
+from core import dashboard_kpis, ingest_service, paths, tenants, ui, views
 
 # The product name your agents see. Placeholder — change it here anytime.
 APP_NAME = "Agent Book"
 
-_ACTIVE = ("Effectuated", "PendingEffectuation", "PendingFollowups")
-
 st.set_page_config(page_title=APP_NAME, page_icon="📘", layout="wide")
 
+ui.inject_css()  # Ethan's midnight-fintech theme (cards, sidebar, typography)
 st.markdown(
     """
     <style>
@@ -116,8 +115,17 @@ def _need_book() -> None:
     st.info("No book yet — upload your HealthSherpa export on the **Upload** page.", icon="📥")
 
 
-def _m(col, label, value, help=None):
-    col.metric(label, value, help=help)
+def _cards(htmls: list) -> None:
+    for col, html in zip(st.columns(len(htmls)), htmls):
+        col.markdown(html, unsafe_allow_html=True)
+
+
+def _hdr(title: str, icon: str) -> None:
+    st.markdown(ui.section_header(title, icon), unsafe_allow_html=True)
+
+
+def _stat(html: str) -> None:
+    st.columns(3)[0].markdown(html, unsafe_allow_html=True)
 
 
 def page_dashboard(tenant: dict, roster) -> None:
@@ -126,35 +134,46 @@ def page_dashboard(tenant: dict, roster) -> None:
     if d is None:
         _need_book(); return
 
+    mom = d.get("mom")
+
+    def spark(col, color):
+        if mom is None or getattr(mom, "empty", True) or col not in mom.columns:
+            return ""
+        return ui.sparkline(ui._spark_vals(mom[col]), color=color)
+
     def fnum(v, plus=False):
         if v is None:
             return "—"
         return f"{'+' if plus and v >= 0 else ''}{v:,.1f}"
 
-    st.subheader("Book snapshot")
-    c = st.columns(3)
-    _m(c[0], "Total active policies", f"{d['policies']:,}")
-    _m(c[1], "Total members", f"{d['members']:,}")
-    _m(c[2], "Avg household size", f"{d['household']:.1f}")
+    _hdr("Book snapshot", "shield")
+    _cards([
+        ui.metric_card("Total active policies", f"{d['policies']:,}", icon_key="shield", spark=spark("Total Members", ui.ELEC)),
+        ui.metric_card("Total members", f"{d['members']:,}", icon_key="users", spark=spark("Total Members", ui.CYAN)),
+        ui.metric_card("Avg household size", f"{d['household']:.1f}", icon_key="home"),
+    ])
 
-    st.subheader("Growth · policies / month")
-    churn = f"{d['churn']:.2f}% monthly churn" if d["churn"] is not None else None
-    c = st.columns(3)
-    _m(c[0], "Avg added / month", fnum(d["added"]))
-    _m(c[1], "Avg lost / month", fnum(d["lost"]), help=churn)
-    _m(c[2], "Avg net growth / month", fnum(d["net_growth"], plus=True))
+    _hdr("Growth · policies / month", "trend")
+    churn = f"{d['churn']:.2f}% monthly churn" if d["churn"] is not None else "All history"
+    _cards([
+        ui.metric_card("Avg added / month", fnum(d["added"]), icon_key="plus", spark=spark("New Policies", ui.GREEN)),
+        ui.metric_card("Avg lost / month", fnum(d["lost"]), sub=churn, icon_key="minus", spark=spark("Policies Lost", ui.RED)),
+        ui.metric_card("Avg net growth / month", fnum(d["net_growth"], plus=True), icon_key="trend", spark=spark("New Policies", ui.ELEC)),
+    ])
 
-    st.subheader("Growth · members / month")
-    c = st.columns(3)
-    _m(c[0], "Avg members added / month", fnum(d["m_added"]))
-    _m(c[1], "Avg members lost / month", fnum(d["m_lost"]))
-    _m(c[2], "Net members / month", fnum(d["net_members"], plus=True))
+    _hdr("Growth · members / month", "trend")
+    _cards([
+        ui.metric_card("Avg members added / month", fnum(d["m_added"]), icon_key="plus", spark=spark("New Members", ui.GREEN)),
+        ui.metric_card("Avg members lost / month", fnum(d["m_lost"]), icon_key="minus", spark=spark("Members Lost", ui.RED)),
+        ui.metric_card("Net members / month", fnum(d["net_members"], plus=True), icon_key="trend", spark=spark("New Members", ui.ELEC)),
+    ])
 
-    st.subheader("Commission forecast")
-    c = st.columns(3)
-    _m(c[0], "Expected monthly", f"${d['comm_monthly']:,.0f}")
-    _m(c[1], "Expected annual", f"${d['comm_annual']:,.0f}")
-    _m(c[2], "Per policy / mo", f"${d['per_policy']:.2f}")
+    _hdr("Commission forecast", "dollar")
+    _cards([
+        ui.metric_card("Expected monthly", f"${d['comm_monthly']:,.0f}", icon_key="dollar", spark=spark("Total Members", "#c4b5fd"), highlight="green"),
+        ui.metric_card("Expected annual", f"${d['comm_annual']:,.0f}", icon_key="calendar"),
+        ui.metric_card("Per policy / mo", f"${d['per_policy']:.2f}", icon_key="file"),
+    ])
 
     if d["history_months"] < 2:
         st.caption(
@@ -169,10 +188,11 @@ def page_book(tenant: dict, roster) -> None:
         _need_book(); return
     a = views.active(roster)
     members = pd.to_numeric(a.get("applicant_count"), errors="coerce").fillna(1).clip(lower=1).sum()
-    c1, c2, c3 = st.columns(3)
-    c1.metric("Active clients", f"{len(a):,}")
-    c2.metric("Members", f"{int(members):,}")
-    c3.metric("Total on file", f"{len(roster):,}")
+    _cards([
+        ui.metric_card("Active clients", f"{len(a):,}", icon_key="shield"),
+        ui.metric_card("Members", f"{int(members):,}", icon_key="users"),
+        ui.metric_card("Total on file", f"{len(roster):,}", icon_key="file"),
+    ])
     st.divider()
     _table(a, ["first_name", "last_name", "carrier", "state", "status", "effective_date"], "")
 
@@ -183,7 +203,7 @@ def page_losses(tenant: dict, roster) -> None:
     if roster is None:
         _need_book(); return
     lost = views.losses(roster)
-    st.metric("Cancelled / terminated", f"{len(lost):,}")
+    _stat(ui.metric_card("Cancelled / terminated", f"{len(lost):,}", icon_key="minus"))
     st.divider()
     _table(lost, ["first_name", "last_name", "carrier", "state", "status", "term_date"],
            "No losses — everyone's still active. 🎉")
@@ -195,7 +215,7 @@ def page_aor(tenant: dict, roster) -> None:
     if roster is None:
         _need_book(); return
     taken = views.aor_taken(roster, tenant.get("npn", ""), tenant.get("name", ""))
-    st.metric("Taken by another agent", f"{len(taken):,}")
+    _stat(ui.metric_card("Taken by another agent", f"{len(taken):,}", icon_key="shield"))
     st.divider()
     _table(taken, ["first_name", "last_name", "state", "taken_by", "carrier"],
            "None taken — you hold every client's AOR. 🛡️")
@@ -207,7 +227,7 @@ def page_verifications(tenant: dict, roster) -> None:
     if roster is None:
         _need_book(); return
     v = views.verifications(roster)
-    st.metric("Docs expired", f"{len(v):,}")
+    _stat(ui.metric_card("Docs expired", f"{len(v):,}", icon_key="clock"))
     st.divider()
     _table(v, ["first_name", "last_name", "carrier", "state", "status"],
            "No expired verifications — you're clean. ✅")
@@ -221,7 +241,7 @@ def page_pastdue(tenant: dict, roster) -> None:
         st.info("Upload your Ambetter and/or Oscar carrier books on the **Upload** page to "
                 "see who's behind on payment.", icon="📥")
         return
-    st.metric("Past due", f"{len(pd_df):,}")
+    _stat(ui.metric_card("Past due", f"{len(pd_df):,}", icon_key="clock"))
     st.divider()
     st.dataframe(pd_df, use_container_width=True, hide_index=True)
 
