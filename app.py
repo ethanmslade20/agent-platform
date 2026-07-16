@@ -36,6 +36,81 @@ if "tenant" not in st.session_state:
     st.session_state.tenant = None
 
 
+_ICON_USER = ("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' "
+              "fill='none' stroke='%237286ad' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E"
+              "%3Ccircle cx='12' cy='8' r='4'/%3E%3Cpath d='M4 20c0-4 4-6.5 8-6.5s8 2.5 8 6.5'/%3E%3C/svg%3E")
+_ICON_LOCK = ("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' "
+              "fill='none' stroke='%237286ad' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E"
+              "%3Crect x='4' y='11' width='16' height='10' rx='2'/%3E%3Cpath d='M8 11V7a4 4 0 0 1 8 0v4'/%3E%3C/svg%3E")
+
+_LOGIN_CSS = f"""
+<style>
+  [data-testid="stToolbar"], [data-testid="stDecoration"], [data-testid="stStatusWidget"], footer {{ display:none !important; }}
+  header[data-testid="stHeader"] {{ background:transparent; }}
+
+  [data-testid="stAppViewContainer"] {{
+    background:
+      radial-gradient(820px 460px at 50% 10%, rgba(59,130,246,0.18), transparent 60%),
+      radial-gradient(680px 480px at 12% 82%, rgba(37,99,235,0.16), transparent 55%),
+      radial-gradient(680px 480px at 88% 74%, rgba(124,58,237,0.16), transparent 55%),
+      #060b1a !important;
+  }}
+
+  /* the glass card = the centered content block */
+  .block-container {{
+    max-width: 600px !important;
+    margin: 6vh auto 0 !important;
+    padding: 44px 54px 40px !important;
+    background: linear-gradient(160deg, rgba(32,46,88,0.55), rgba(14,22,46,0.6)) !important;
+    border: 1px solid rgba(129,140,248,0.34);
+    border-radius: 26px;
+    box-shadow: 0 34px 90px rgba(0,0,0,0.55), 0 0 70px rgba(59,130,246,0.14), inset 0 1px 0 rgba(255,255,255,0.05);
+    backdrop-filter: blur(16px);
+  }}
+
+  [data-testid="stMarkdownContainer"] p.brand {{ text-align:center; font-size:2.6rem !important; font-weight:800 !important; color:#fff !important; margin:0 !important; letter-spacing:-.02em; line-height:1.1; }}
+  [data-testid="stMarkdownContainer"] p.brand-sub {{ text-align:center; color:#9fb0cc !important; margin:.4rem 0 1.5rem !important; font-size:1.05rem !important; }}
+
+  /* tabs */
+  [data-baseweb="tab-list"] {{ justify-content:center; gap:40px; border-bottom:1px solid rgba(129,140,248,0.16) !important; }}
+  [data-baseweb="tab"] {{ color:#8a98b5 !important; font-weight:600; font-size:1rem; padding:8px 2px !important; }}
+  [data-baseweb="tab"][aria-selected="true"] {{ color:#60a5fa !important; }}
+  [data-baseweb="tab-highlight"] {{ background:#3b82f6 !important; height:2px !important; }}
+
+  [data-testid="stTextInput"] label {{ color:#e6edf7 !important; font-weight:600; font-size:.95rem; }}
+
+  /* inputs */
+  [data-testid="stTextInput"] [data-baseweb="input"],
+  [data-testid="stTextInput"] [data-baseweb="base-input"] {{
+    background: rgba(9,16,34,0.72) !important;
+    border: 1px solid rgba(96,165,250,0.28) !important;
+    border-radius: 12px !important;
+    background-repeat:no-repeat !important; background-position:15px center !important; background-size:18px 18px !important;
+  }}
+  [data-testid="stTextInput"]:has(input[type="password"]) [data-baseweb="input"] {{ background-image:url("{_ICON_LOCK}") !important; }}
+  [data-testid="stTextInput"]:has(input:not([type="password"])) [data-baseweb="input"] {{ background-image:url("{_ICON_USER}") !important; }}
+  [data-testid="stTextInput"] input {{
+    background:transparent !important; color:#e6edf7 !important;
+    padding: 13px 12px 13px 46px !important; font-size:1rem;
+  }}
+  [data-testid="stTextInput"] input::placeholder {{ color:#66768f !important; }}
+  [data-baseweb="input"]:focus-within {{ border-color:#3b82f6 !important; box-shadow:0 0 0 3px rgba(59,130,246,0.18) !important; }}
+
+  .forgot {{ text-align:right; margin:2px 0 6px; }}
+  .forgot span {{ color:#60a5fa; font-size:.85rem; cursor:pointer; }}
+
+  /* gradient Sign in button */
+  [data-testid="stFormSubmitButton"] button {{
+    background: linear-gradient(90deg, #3b82f6 0%, #7c3aed 100%) !important;
+    color:#fff !important; font-weight:700 !important; font-size:1.05rem !important;
+    border:none !important; border-radius:14px !important; padding:13px !important;
+    box-shadow: 0 12px 30px rgba(79,70,229,0.42) !important; transition:filter .15s ease;
+  }}
+  [data-testid="stFormSubmitButton"] button:hover {{ filter:brightness(1.08); }}
+</style>
+"""
+
+
 # ── Auth ────────────────────────────────────────────────────────────────────
 def _invite_code() -> str:
     """Invite code required to create accounts (from host secret or env var).
@@ -48,7 +123,7 @@ def _invite_code() -> str:
 
 
 def login_screen() -> None:
-    st.markdown('<div class="login-card">', unsafe_allow_html=True)
+    st.markdown(_LOGIN_CSS, unsafe_allow_html=True)
     st.markdown(f'<p class="brand">📘 {APP_NAME}</p>', unsafe_allow_html=True)
     st.markdown('<p class="brand-sub">Sign in to your book.</p>', unsafe_allow_html=True)
 
@@ -60,8 +135,9 @@ def login_screen() -> None:
 
     with tabs[0]:
         with st.form("login"):
-            username = st.text_input("Username")
-            password = st.text_input("Password", type="password")
+            username = st.text_input("Username", placeholder="Enter your username")
+            password = st.text_input("Password", type="password", placeholder="Enter your password")
+            st.markdown('<div class="forgot"><span>Forgot password?</span></div>', unsafe_allow_html=True)
             submitted = st.form_submit_button("Sign in", use_container_width=True)
         if submitted:
             tenant = tenants.verify(username, password)
@@ -76,10 +152,10 @@ def login_screen() -> None:
         with tabs[1]:
             st.caption("New agents can only be added with an invite code.")
             with st.form("signup"):
-                new_name = st.text_input("Agent's name")
-                new_user = st.text_input("Choose a username")
-                new_pass = st.text_input("Choose a password", type="password")
-                code = st.text_input("Invite code", type="password")
+                new_name = st.text_input("Agent's name", placeholder="Full name")
+                new_user = st.text_input("Choose a username", placeholder="Pick a username")
+                new_pass = st.text_input("Choose a password", type="password", placeholder="Pick a password")
+                code = st.text_input("Invite code", type="password", placeholder="Enter your invite code")
                 created = st.form_submit_button("Create account", use_container_width=True)
             if created:
                 if code.strip() != invite:
@@ -95,7 +171,6 @@ def login_screen() -> None:
                         st.rerun()
                     except ValueError as e:
                         st.error(str(e))
-    st.markdown("</div>", unsafe_allow_html=True)
 
 
 # ── Pages ───────────────────────────────────────────────────────────────────
