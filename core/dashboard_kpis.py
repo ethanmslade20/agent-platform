@@ -59,4 +59,6 @@ def compute(agent_id: str, roster=None) -> dict | None:
         "per_policy": (monthly / policies) if policies else 0.0,
         "history_months": len(months),
         "mom": mom,
+        "carrier_df": data.get("carrier_df"),
+        "state_df": data.get("state_df"),
     }

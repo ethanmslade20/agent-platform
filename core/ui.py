@@ -1,6 +1,8 @@
 """Design system ported from Ethan's commission-tracker so the product matches
 his look — midnight fintech theme, metric cards, section headers, sparklines."""
 import pandas as pd
+import plotly.express as px
+import plotly.graph_objects as go
 import streamlit as st
 
 NAVY  = "#0f1c34"
@@ -542,5 +544,45 @@ def stat_card(label, value, icon_key, color, delta=None, delta_good=True):
 #   green = money / good · red = risk / loss · gold = needs attention
 #   electric/cyan = neutral info · purple = time / coverage
 GOOD, RISK, ATTN, INFO = GREEN, RED, GOLD, ELEC
+
+
+
+# ── Plotly chart helpers (ported) ──────────────────────────────────────────
+def chart_head(title, sub, icon_key):
+    return (
+        f'<div class="chart-head"><div class="ch-icon">{ICONS.get(icon_key, "")}</div>'
+        f'<div><div class="ch-title">{title}</div><div class="ch-sub">{sub}</div></div>'
+        f'<div class="ch-dots">⋮</div></div>'
+    )
+
+
+
+def show_chart(fig):
+    """Render a Plotly chart: keep hover tooltips, but disable the floating
+    toolbar and all zoom/pan/drag so it's display-only."""
+    fig.update_xaxes(fixedrange=True)
+    fig.update_yaxes(fixedrange=True)
+    fig.update_layout(dragmode=False)
+    st.plotly_chart(
+        fig,
+        use_container_width=True,
+        config={"displayModeBar": False, "scrollZoom": False, "doubleClick": False},
+    )
+
+
+
+def _chart_layout(**extra) -> dict:
+    base = dict(
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(color="#cbd5e1", size=12, family="Inter, sans-serif"),
+        margin=dict(t=30, b=40, l=10, r=10),
+        xaxis=dict(gridcolor="rgba(96,165,250,0.12)", showgrid=True, zeroline=False),
+        yaxis=dict(gridcolor="rgba(96,165,250,0.12)", showgrid=True, zeroline=False),
+        hoverlabel=dict(bgcolor="#0f1c34", bordercolor="rgba(96,165,250,0.4)",
+                        font=dict(color="#f8fafc", family="Inter, sans-serif")),
+    )
+    base.update(extra)
+    return base
 
 
