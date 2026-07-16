@@ -6,6 +6,7 @@ Phase 2: in-app upload (HealthSherpa builds the book; carriers stored for reconc
 """
 import calendar
 import datetime as dt
+import os
 
 import pandas as pd
 import streamlit as st
@@ -36,13 +37,28 @@ if "tenant" not in st.session_state:
 
 
 # ── Auth ────────────────────────────────────────────────────────────────────
+def _invite_code() -> str:
+    """Invite code required to create accounts (from host secret or env var).
+    Empty = signup fully closed, login only."""
+    try:
+        c = st.secrets.get("INVITE_CODE")
+    except Exception:
+        c = None
+    return str(c or os.environ.get("INVITE_CODE") or "").strip()
+
+
 def login_screen() -> None:
     st.markdown('<div class="login-card">', unsafe_allow_html=True)
     st.markdown(f'<p class="brand">📘 {APP_NAME}</p>', unsafe_allow_html=True)
     st.markdown('<p class="brand-sub">Sign in to your book.</p>', unsafe_allow_html=True)
-    tab_in, tab_up = st.tabs(["Sign in", "Create account"])
 
-    with tab_in:
+    # Invite-only: account creation is shown ONLY when an INVITE_CODE is configured
+    # (host secret / env), and the correct code must be entered. No code = login-only,
+    # so a random visitor to the public URL can never create an account.
+    invite = _invite_code()
+    tabs = st.tabs(["Sign in", "Create account (invite)"] if invite else ["Sign in"])
+
+    with tabs[0]:
         with st.form("login"):
             username = st.text_input("Username")
             password = st.text_input("Password", type="password")
@@ -56,24 +72,29 @@ def login_screen() -> None:
             else:
                 st.error("Wrong username or password.")
 
-    with tab_up:
-        with st.form("signup"):
-            new_name = st.text_input("Your name")
-            new_user = st.text_input("Choose a username")
-            new_pass = st.text_input("Choose a password", type="password")
-            created = st.form_submit_button("Create account", use_container_width=True)
-        if created:
-            if not (new_user.strip() and new_pass.strip()):
-                st.error("Username and password are required.")
-            else:
-                try:
-                    tenants.create_tenant(new_user.strip(), new_pass, (new_name or new_user).strip())
-                    tenant = tenants.verify(new_user.strip(), new_pass)
-                    paths.ensure_dirs(tenant["agent_id"])
-                    st.session_state.tenant = tenant
-                    st.rerun()
-                except ValueError as e:
-                    st.error(str(e))
+    if invite:
+        with tabs[1]:
+            st.caption("New agents can only be added with an invite code.")
+            with st.form("signup"):
+                new_name = st.text_input("Agent's name")
+                new_user = st.text_input("Choose a username")
+                new_pass = st.text_input("Choose a password", type="password")
+                code = st.text_input("Invite code", type="password")
+                created = st.form_submit_button("Create account", use_container_width=True)
+            if created:
+                if code.strip() != invite:
+                    st.error("Invalid invite code.")
+                elif not (new_user.strip() and new_pass.strip()):
+                    st.error("Username and password are required.")
+                else:
+                    try:
+                        tenants.create_tenant(new_user.strip(), new_pass, (new_name or new_user).strip())
+                        tenant = tenants.verify(new_user.strip(), new_pass)
+                        paths.ensure_dirs(tenant["agent_id"])
+                        st.session_state.tenant = tenant
+                        st.rerun()
+                    except ValueError as e:
+                        st.error(str(e))
     st.markdown("</div>", unsafe_allow_html=True)
 
 
