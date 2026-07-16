@@ -9,7 +9,8 @@ import json
 
 from core import paths, store
 
-_DEFAULT = {"licensed_states": [], "exclusions": [], "appointments": {}}
+_DEFAULT = {"licensed_states": [], "exclusions": [], "appointments": {},
+            "goals": {}, "aep": {}}
 
 
 def _file(agent_id: str):

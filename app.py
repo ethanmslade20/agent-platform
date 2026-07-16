@@ -500,12 +500,103 @@ def page_commissions(tenant: dict, roster) -> None:
 
 def page_goals(tenant: dict, roster) -> None:
     st.title("Goals")
-    st.info("Goal tracking is on the way — set monthly policy/member targets and watch your progress.", icon="🎯")
+    st.caption("Set your monthly targets and track this month's progress.")
+    agent_id = tenant["agent_id"]
+    cfg = settings.get(agent_id)
+    goals = cfg.get("goals") or {}
+
+    with st.container(border=True):
+        st.markdown(ui.section_header("Monthly Targets", "trend"), unsafe_allow_html=True)
+        with st.form("goals_form"):
+            c1, c2 = st.columns(2)
+            gp = c1.number_input("New policies / month", min_value=0, step=5,
+                                 value=int(goals.get("policies", 0)))
+            gm = c2.number_input("New members / month", min_value=0, step=5,
+                                 value=int(goals.get("members", 0)))
+            if st.form_submit_button("Save targets", type="primary"):
+                settings.save(agent_id, {**cfg, "goals": {"policies": int(gp), "members": int(gm)}})
+                st.success("Targets saved.")
+                st.rerun()
+
+    if roster is None:
+        _need_book(); return
+    months_av = daily.months_available(roster)
+    if not months_av:
+        st.info("No dated policies yet — your progress fills in once you upload."); return
+
+    ym = months_av[0]  # most recent month of new business
+    ddf = daily.daily_counts(roster, ym)
+    pol_now, mem_now = int(ddf["Policies"].sum()), int(ddf["Members"].sum())
+    month_label = pd.Timestamp(ym + "-01").strftime("%B %Y")
+
+    st.markdown("<br>", unsafe_allow_html=True)
+    _hdr(f"📈 Progress — {month_label}", "trend")
+
+    def _goal_card(col, label, now, goal, color):
+        pct = round(now / goal * 100) if goal else 0
+        sub = f"{pct}% of {goal:,}" if goal else "no target set"
+        with col:
+            st.markdown(ui.stat_card(label, f"{now:,}", "trend", color), unsafe_allow_html=True)
+            st.progress(min(now / goal, 1.0) if goal else 0.0, text=sub)
+
+    cols = st.columns(2)
+    _goal_card(cols[0], "New Policies", pol_now, int(goals.get("policies", 0)), ui.BLUE)
+    _goal_card(cols[1], "New Members", mem_now, int(goals.get("members", 0)), ui.ELEC)
+
+
+_AEP_STATUSES = ["Not Started", "Contacted", "Renewed", "Lost"]
 
 
 def page_aep(tenant: dict, roster) -> None:
     st.title("AEP Tracker")
-    st.info("The open-enrollment re-enrollment tracker (keep / switch / done per client) is on the way.", icon="🗂️")
+    st.caption("Work every active client through open enrollment — set each one's status as you go.")
+    if roster is None:
+        _need_book(); return
+    agent_id = tenant["agent_id"]
+    cfg = settings.get(agent_id)
+    saved = cfg.get("aep") or {}
+
+    active = views.active(roster)
+    if active.empty:
+        st.info("No active clients to track yet."); return
+
+    def _k(f, l):
+        s = f"{f} {l}".lower().strip()
+        return "".join(ch for ch in s if ch.isalnum() or ch == " ")
+
+    rows = []
+    for _, r in active.iterrows():
+        k = _k(r.get("first_name", ""), r.get("last_name", ""))
+        s = saved.get(k, {})
+        rows.append({"_key": k,
+                     "Client": f"{r.get('first_name', '')} {r.get('last_name', '')}".strip().title(),
+                     "Carrier": r.get("carrier", ""), "State": r.get("state", ""),
+                     "Status": s.get("status", "Not Started"), "Notes": s.get("notes", "")})
+    df = pd.DataFrame(rows)
+
+    done = int((df["Status"] == "Renewed").sum())
+    started = int((df["Status"] != "Not Started").sum())
+    _cards([
+        ui.stat_card("Clients to Renew", f"{len(df):,}", "users", ui.BLUE),
+        ui.stat_card("Worked", f"{started:,}", "trend", ui.GOLD),
+        ui.stat_card("Renewed", f"{done:,}", "shield", ui.GREEN),
+    ])
+    st.progress(done / len(df) if len(df) else 0.0,
+                text=f"{done:,} of {len(df):,} renewed ({round(done / len(df) * 100) if len(df) else 0}%)")
+
+    edited = st.data_editor(
+        df.drop(columns=["_key"]), hide_index=True, use_container_width=True, height=460,
+        disabled=["Client", "Carrier", "State"], key="aep_editor",
+        column_config={"Status": st.column_config.SelectboxColumn("Status", options=_AEP_STATUSES, width="small")})
+
+    if st.button("Save statuses", type="primary"):
+        out = {}
+        for i in range(len(edited)):
+            out[df.iloc[i]["_key"]] = {"status": edited.iloc[i]["Status"],
+                                       "notes": str(edited.iloc[i].get("Notes", "") or "")}
+        settings.save(agent_id, {**cfg, "aep": out})
+        st.success("Statuses saved.")
+        st.rerun()
 
 
 _US_STATES = ["AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "FL", "GA", "HI", "IA", "ID",
@@ -692,7 +783,7 @@ _PAGES = {
     "AOR Defense": page_aor, "Verifications": page_verifications,
     "Re-Engage": page_losses, "AEP Tracker": page_aep, "Settings": page_settings,
 }
-_NO_ROSTER = {"Upload", "Settings", "Goals", "AEP Tracker", "Book Updates"}
+_NO_ROSTER = {"Upload", "Settings", "Book Updates"}
 
 
 def _nav_css() -> None:
