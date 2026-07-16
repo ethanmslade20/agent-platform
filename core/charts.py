@@ -92,6 +92,25 @@ def trends_fig(mom_df):
     return f
 
 
+def daily_month_fig(daily_df: pd.DataFrame):
+    """Submissions-by-day bar for one month — best day highlighted gold."""
+    df = daily_df.copy()
+    df["Day"] = df["Date"].dt.strftime("%b %d")
+    mx = max(int(df["Policies"].max()), 1)
+    order = df["Day"].tolist()
+    colors = [GOLD if int(p) == mx else GREEN for p in df["Policies"]]
+    fig = px.bar(df, x="Day", y="Policies", text="Policies")
+    fig.update_traces(marker_color=colors, marker_cornerradius=4, textposition="outside",
+                      textfont_size=9, hovertemplate="%{x}: %{y} policies<extra></extra>")
+    fig.update_layout(**ui._chart_layout(
+        showlegend=False, height=430,
+        xaxis=dict(showgrid=False, tickangle=-45, tickfont=dict(size=9),
+                   categoryorder="array", categoryarray=order),
+        yaxis=dict(title="Policies", gridcolor="rgba(96,165,250,0.10)"),
+        margin=dict(t=14, b=10, l=10, r=10)))
+    return fig
+
+
 def daily_new_fig(roster: pd.DataFrame):
     col = "submission_date" if "submission_date" in roster.columns else "effective_date"
     if col not in roster.columns:

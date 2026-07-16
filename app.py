@@ -4,10 +4,13 @@ Phase 1: sign-in gate + per-tenant isolation.
 Phase 2: in-app upload (HealthSherpa builds the book; carriers stored for reconciliation)
          and a first look at the agent's book, all scoped to their own workspace.
 """
+import calendar
+import datetime as dt
+
 import pandas as pd
 import streamlit as st
 
-from core import charts, dashboard_kpis, ingest_service, paths, tenants, ui, views
+from core import charts, daily, dashboard_kpis, ingest_service, paths, tenants, ui, views
 
 # The product name your agents see. Placeholder — change it here anytime.
 APP_NAME = "Agent Book"
@@ -104,11 +107,12 @@ _NAMES = {"first_name": "First", "last_name": "Last", "carrier": "Carrier",
 
 
 def _table(df: pd.DataFrame, cols: list, empty: str) -> None:
-    if df is None or df.empty:
-        st.info(empty)
-        return
-    show = [c for c in cols if c in df.columns]
-    st.dataframe(df[show].rename(columns=_NAMES), use_container_width=True, hide_index=True)
+    with st.container(border=True):
+        if df is None or df.empty:
+            st.info(empty)
+            return
+        show = [c for c in cols if c in df.columns]
+        st.dataframe(df[show].rename(columns=_NAMES), use_container_width=True, hide_index=True)
 
 
 def _need_book() -> None:
@@ -229,13 +233,70 @@ def page_dashboard(tenant: dict, roster) -> None:
 
 def page_daily(tenant: dict, roster) -> None:
     st.title("Daily Tracker")
-    st.caption("New policies added per day (last 60 days with activity).")
     if roster is None:
         _need_book(); return
-    fig = charts.daily_new_fig(roster)
-    if fig is None:
+
+    # ── All-time personal bests ───────────────────────────────────────────────
+    best_day, best_week, best_month = daily.personal_bests(roster)
+    _hdr("🏆 Personal Bests — New Business (All Time)", "trend")
+    for col, title, rec in zip(st.columns(3), ["Best Day", "Best Week", "Best Month"],
+                               [best_day, best_week, best_month]):
+        with col, st.container(border=True):
+            st.markdown(f"<div style='font-size:.72rem;letter-spacing:.09em;color:#94a3b8;"
+                        f"text-transform:uppercase;font-weight:700'>{title}</div>", unsafe_allow_html=True)
+            if rec:
+                st.markdown(
+                    f"<div style='font-size:1.9rem;font-weight:800;color:#fff;line-height:1.1;margin-top:6px'>"
+                    f"{rec['pol']} <span style='font-size:.85rem;color:#22c55e;font-weight:700'>policies</span></div>"
+                    f"<div style='font-size:.78rem;color:#94a3b8'>{rec['pol_when']}</div>"
+                    f"<div style='font-size:1.5rem;font-weight:800;color:#fff;line-height:1.1;margin-top:10px'>"
+                    f"{rec['mem']} <span style='font-size:.85rem;color:#60a5fa;font-weight:700'>members</span></div>"
+                    f"<div style='font-size:.78rem;color:#94a3b8'>{rec['mem_when']}</div>", unsafe_allow_html=True)
+            else:
+                st.markdown("—")
+
+    months_av = daily.months_available(roster)
+    if not months_av:
         st.info("No dated policies to chart yet."); return
-    ui.show_chart(fig)
+    labels = {pd.Timestamp(m + "-01").strftime("%B %Y"): m for m in months_av}
+    ym = labels[st.selectbox("Select month", list(labels))]
+
+    ddf = daily.daily_counts(roster, ym)
+    year, mnum = int(ym[:4]), int(ym[5:7])
+    dim = calendar.monthrange(year, mnum)[1]
+    today = dt.date.today()
+    elapsed = today.day if (today.year == year and today.month == mnum) else dim
+    total_pol, total_mem = int(ddf["Policies"].sum()), int(ddf["Members"].sum())
+    days_active = int((ddf["Policies"] > 0).sum())
+    avg = round(total_pol / max(elapsed, 1), 1)
+    pct = round(days_active / dim * 100)
+
+    _cards([
+        ui.stat_card("Total Policies Submitted", f"{total_pol:,}", "file", ui.BLUE),
+        ui.stat_card("Total Heads Sold", f"{total_mem:,}", "users", ui.ELEC),
+        ui.stat_card(f"Daily Avg ({elapsed} days elapsed)", avg, "trend", ui.CYAN),
+        ui.stat_card(f"Days with Activity ({pct}% of {dim})", days_active, "calendar", ui.PURPLE),
+    ])
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    col_chart, col_table = st.columns([3, 2])
+    with col_chart, st.container(border=True):
+        st.markdown(ui.chart_head("Submissions by Day", "Policies submitted per day this month", "bars"),
+                    unsafe_allow_html=True)
+        ui.show_chart(charts.daily_month_fig(ddf))
+    with col_table, st.container(border=True):
+        st.markdown(ui.chart_head("Day-by-Day Breakdown", "Daily policies & members", "calendar"),
+                    unsafe_allow_html=True)
+        tbl = ddf.copy()
+        tbl["Day"] = tbl["Date"].dt.strftime("%b %d")
+        st.dataframe(
+            tbl[["Day", "Policies", "Members"]], hide_index=True, use_container_width=True, height=430,
+            column_config={
+                "Policies": st.column_config.ProgressColumn(
+                    "Policies", min_value=0, max_value=max(int(ddf["Policies"].max()), 1), format="%d"),
+                "Members": st.column_config.ProgressColumn(
+                    "Members", min_value=0, max_value=max(int(ddf["Members"].max()), 1), format="%d"),
+            })
 
 
 def page_trends(tenant: dict, roster) -> None:
@@ -311,9 +372,9 @@ def page_book(tenant: dict, roster) -> None:
     a = views.active(roster)
     members = pd.to_numeric(a.get("applicant_count"), errors="coerce").fillna(1).clip(lower=1).sum()
     _cards([
-        ui.metric_card("Active clients", f"{len(a):,}", icon_key="shield"),
-        ui.metric_card("Members", f"{int(members):,}", icon_key="users"),
-        ui.metric_card("Total on file", f"{len(roster):,}", icon_key="file"),
+        ui.stat_card("Active clients", f"{len(a):,}", "shield", ui.GREEN),
+        ui.stat_card("Members", f"{int(members):,}", "users", ui.ELEC),
+        ui.stat_card("Total on file", f"{len(roster):,}", "file", ui.BLUE),
     ])
     st.divider()
     _table(a, ["first_name", "last_name", "carrier", "state", "status", "effective_date"], "")
@@ -325,8 +386,7 @@ def page_losses(tenant: dict, roster) -> None:
     if roster is None:
         _need_book(); return
     lost = views.losses(roster)
-    _stat(ui.metric_card("Cancelled / terminated", f"{len(lost):,}", icon_key="minus"))
-    st.divider()
+    _stat(ui.stat_card("Cancelled / terminated", f"{len(lost):,}", "minus", ui.RED))
     _table(lost, ["first_name", "last_name", "carrier", "state", "status", "term_date"],
            "No losses — everyone's still active. 🎉")
 
@@ -337,8 +397,7 @@ def page_aor(tenant: dict, roster) -> None:
     if roster is None:
         _need_book(); return
     taken = views.aor_taken(roster, tenant.get("npn", ""), tenant.get("name", ""))
-    _stat(ui.metric_card("Taken by another agent", f"{len(taken):,}", icon_key="shield"))
-    st.divider()
+    _stat(ui.stat_card("Taken by another agent", f"{len(taken):,}", "shield", ui.GOLD))
     _table(taken, ["first_name", "last_name", "state", "taken_by", "carrier"],
            "None taken — you hold every client's AOR. 🛡️")
 
@@ -349,8 +408,7 @@ def page_verifications(tenant: dict, roster) -> None:
     if roster is None:
         _need_book(); return
     v = views.verifications(roster)
-    _stat(ui.metric_card("Docs expired", f"{len(v):,}", icon_key="clock"))
-    st.divider()
+    _stat(ui.stat_card("Docs expired", f"{len(v):,}", "clock", ui.GOLD))
     _table(v, ["first_name", "last_name", "carrier", "state", "status"],
            "No expired verifications — you're clean. ✅")
 
@@ -363,9 +421,9 @@ def page_pastdue(tenant: dict, roster) -> None:
         st.info("Upload your Ambetter and/or Oscar carrier books on the **Upload** page to "
                 "see who's behind on payment.", icon="📥")
         return
-    _stat(ui.metric_card("Past due", f"{len(pd_df):,}", icon_key="clock"))
-    st.divider()
-    st.dataframe(pd_df, use_container_width=True, hide_index=True)
+    _stat(ui.stat_card("Past due", f"{len(pd_df):,}", "clock", ui.RED))
+    with st.container(border=True):
+        st.dataframe(pd_df, use_container_width=True, hide_index=True)
 
 
 # ── Shell ───────────────────────────────────────────────────────────────────
