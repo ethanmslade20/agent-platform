@@ -40,18 +40,40 @@ def login_screen() -> None:
     st.markdown('<div class="login-card">', unsafe_allow_html=True)
     st.markdown(f'<p class="brand">📘 {APP_NAME}</p>', unsafe_allow_html=True)
     st.markdown('<p class="brand-sub">Sign in to your book.</p>', unsafe_allow_html=True)
-    with st.form("login"):
-        username = st.text_input("Username")
-        password = st.text_input("Password", type="password")
-        submitted = st.form_submit_button("Sign in", use_container_width=True)
-    if submitted:
-        tenant = tenants.verify(username, password)
-        if tenant:
-            paths.ensure_dirs(tenant["agent_id"])
-            st.session_state.tenant = tenant
-            st.rerun()
-        else:
-            st.error("Wrong username or password.")
+    tab_in, tab_up = st.tabs(["Sign in", "Create account"])
+
+    with tab_in:
+        with st.form("login"):
+            username = st.text_input("Username")
+            password = st.text_input("Password", type="password")
+            submitted = st.form_submit_button("Sign in", use_container_width=True)
+        if submitted:
+            tenant = tenants.verify(username, password)
+            if tenant:
+                paths.ensure_dirs(tenant["agent_id"])
+                st.session_state.tenant = tenant
+                st.rerun()
+            else:
+                st.error("Wrong username or password.")
+
+    with tab_up:
+        with st.form("signup"):
+            new_name = st.text_input("Your name")
+            new_user = st.text_input("Choose a username")
+            new_pass = st.text_input("Choose a password", type="password")
+            created = st.form_submit_button("Create account", use_container_width=True)
+        if created:
+            if not (new_user.strip() and new_pass.strip()):
+                st.error("Username and password are required.")
+            else:
+                try:
+                    tenants.create_tenant(new_user.strip(), new_pass, (new_name or new_user).strip())
+                    tenant = tenants.verify(new_user.strip(), new_pass)
+                    paths.ensure_dirs(tenant["agent_id"])
+                    st.session_state.tenant = tenant
+                    st.rerun()
+                except ValueError as e:
+                    st.error(str(e))
     st.markdown("</div>", unsafe_allow_html=True)
 
 
