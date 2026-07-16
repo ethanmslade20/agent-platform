@@ -277,7 +277,10 @@ def normalize_dataframe(
                 str(r.get("last_name", "") or "")
             ), axis=1
         )
-        df["policy_id"] = source.upper() + "_" + nk
+        # .astype(str) keeps this safe when df is empty (an empty apply yields a
+        # float64 Series, and "str" + float64 raises) — e.g. an agent whose NPN
+        # matches no clients in the upload.
+        df["policy_id"] = source.upper() + "_" + nk.astype(str)
 
     # Default applicant_count and flag
     if default_ac is not None:
