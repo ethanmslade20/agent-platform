@@ -75,6 +75,15 @@ def create_tenant(username: str, password: str, name: str, npn: str = "") -> dic
     return _public(u, d[u])
 
 
+def update_npn(username: str, npn: str) -> None:
+    """Let an agent set/change their own NPN from Settings (self-service)."""
+    d = _load()
+    u = username.lower().strip()
+    if u in d:
+        d[u]["npn"] = str(npn).strip()
+        _save(d)
+
+
 def verify(username: str, password: str) -> dict | None:
     """Return the tenant's public record on a correct login, else None."""
     d = _load()

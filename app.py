@@ -358,11 +358,22 @@ def page_aep(tenant: dict, roster) -> None:
 
 def page_settings(tenant: dict, roster) -> None:
     st.title("Settings")
-    st.write(f"**Agent:** {tenant.get('name') or tenant.get('username')}")
-    if tenant.get("npn"):
-        st.write(f"**NPN:** {tenant['npn']}")
-    st.write(f"**Private workspace:** `tenants/{tenant['agent_id']}/`")
-    st.caption("Change password and licensed-states settings are coming soon.")
+    with st.container(border=True):
+        st.markdown(ui.chart_head("Your profile", "Your NPN keeps your book scoped to you", "shield"),
+                    unsafe_allow_html=True)
+        st.write(f"**Agent:** {tenant.get('name') or tenant.get('username')}")
+        with st.form("npn_form"):
+            npn = st.text_input(
+                "Your NPN (National Producer Number)", value=tenant.get("npn", ""),
+                help="This keeps only YOUR clients when you upload. Set it before your first upload.")
+            saved = st.form_submit_button("Save NPN", type="primary")
+        if saved:
+            tenants.update_npn(tenant["username"], npn)
+            st.session_state.tenant["npn"] = npn.strip()
+            st.success("Saved. If you already uploaded, re-upload your HealthSherpa export so it "
+                       "filters to your clients.")
+        st.write(f"**Private workspace:** `tenants/{tenant['agent_id']}/`")
+    st.caption("Change-password and licensed-states settings are coming soon.")
 
 
 def page_book(tenant: dict, roster) -> None:
