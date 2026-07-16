@@ -19,7 +19,7 @@ from tracker.config import load_carrier_configs
 from tracker.diff import build_all_clients
 from tracker.ingest import ingest_file, load_all_snapshots
 
-from core import paths
+from core import paths, store
 
 _ROOT = Path(__file__).resolve().parent.parent
 _CARRIER_CFG = str(_ROOT / "config" / "carrier_configs.yaml")
@@ -65,7 +65,10 @@ def ingest_healthsherpa(agent_id: str, data: bytes, npn: str = "", name: str = "
     source_configs = _scope_ownership(load_carrier_configs(_CARRIER_CFG), npn, name)
     # full_config omitted → skip the per-agent licensing matrix (that's Ethan's; a
     # future per-tenant setting). Keep all of the agent's own clients.
-    return ingest_file(dest, source_configs, paths.snapshots_dir(agent_id), month=month)
+    snap, df = ingest_file(dest, source_configs, paths.snapshots_dir(agent_id), month=month)
+    if store.using_db() and snap:
+        store.put_file(agent_id, f"snapshots/{Path(snap).name}", Path(snap).read_bytes())
+    return snap, df
 
 
 def save_carrier(agent_id: str, carrier: str, data: bytes) -> Path:
@@ -85,12 +88,19 @@ def save_carrier(agent_id: str, carrier: str, data: bytes) -> Path:
             dest.write_bytes(z.read(inner))
     else:
         dest.write_bytes(data)
+    if store.using_db():
+        store.put_file(agent_id, f"carrier_books/{dest.name}", dest.read_bytes())
     return dest
 
 
 def build_book(agent_id: str):
     """The agent's person-level roster from everything they've uploaded, or None."""
-    months = load_all_snapshots(paths.snapshots_dir(agent_id))
+    snap_dir = paths.snapshots_dir(agent_id)
+    # On the host, the local cache may be empty (fresh container) — pull the
+    # tenant's files back from the database before building.
+    if store.using_db() and not any(snap_dir.glob("*.parquet")):
+        store.hydrate(agent_id, paths.tenant_root(agent_id))
+    months = load_all_snapshots(snap_dir)
     if not months:
         return None
     roster = build_all_clients(months)

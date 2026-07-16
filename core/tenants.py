@@ -20,6 +20,9 @@ _ITERATIONS = 200_000
 
 
 def _load() -> dict:
+    from core import store
+    if store.using_db():
+        return store.load_tenants()
     if _TENANTS_FILE.exists():
         try:
             return json.loads(_TENANTS_FILE.read_text())
@@ -29,6 +32,10 @@ def _load() -> dict:
 
 
 def _save(d: dict) -> None:
+    from core import store
+    if store.using_db():
+        store.save_tenants(d)
+        return
     _TENANTS_FILE.parent.mkdir(parents=True, exist_ok=True)
     _TENANTS_FILE.write_text(json.dumps(d, indent=2))
 
