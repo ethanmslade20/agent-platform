@@ -7,7 +7,7 @@ Phase 2: in-app upload (HealthSherpa builds the book; carriers stored for reconc
 import pandas as pd
 import streamlit as st
 
-from core import ingest_service, paths, tenants, views
+from core import dashboard_kpis, ingest_service, paths, tenants, views
 
 # The product name your agents see. Placeholder — change it here anytime.
 APP_NAME = "Agent Book"
@@ -116,6 +116,53 @@ def _need_book() -> None:
     st.info("No book yet — upload your HealthSherpa export on the **Upload** page.", icon="📥")
 
 
+def _m(col, label, value, help=None):
+    col.metric(label, value, help=help)
+
+
+def page_dashboard(tenant: dict, roster) -> None:
+    st.title("Dashboard")
+    d = dashboard_kpis.compute(tenant["agent_id"], roster)
+    if d is None:
+        _need_book(); return
+
+    def fnum(v, plus=False):
+        if v is None:
+            return "—"
+        return f"{'+' if plus and v >= 0 else ''}{v:,.1f}"
+
+    st.subheader("Book snapshot")
+    c = st.columns(3)
+    _m(c[0], "Total active policies", f"{d['policies']:,}")
+    _m(c[1], "Total members", f"{d['members']:,}")
+    _m(c[2], "Avg household size", f"{d['household']:.1f}")
+
+    st.subheader("Growth · policies / month")
+    churn = f"{d['churn']:.2f}% monthly churn" if d["churn"] is not None else None
+    c = st.columns(3)
+    _m(c[0], "Avg added / month", fnum(d["added"]))
+    _m(c[1], "Avg lost / month", fnum(d["lost"]), help=churn)
+    _m(c[2], "Avg net growth / month", fnum(d["net_growth"], plus=True))
+
+    st.subheader("Growth · members / month")
+    c = st.columns(3)
+    _m(c[0], "Avg members added / month", fnum(d["m_added"]))
+    _m(c[1], "Avg members lost / month", fnum(d["m_lost"]))
+    _m(c[2], "Net members / month", fnum(d["net_members"], plus=True))
+
+    st.subheader("Commission forecast")
+    c = st.columns(3)
+    _m(c[0], "Expected monthly", f"${d['comm_monthly']:,.0f}")
+    _m(c[1], "Expected annual", f"${d['comm_annual']:,.0f}")
+    _m(c[2], "Per policy / mo", f"${d['per_policy']:.2f}")
+
+    if d["history_months"] < 2:
+        st.caption(
+            "Growth metrics reflect your latest upload. They sharpen into true "
+            "month-over-month averages as you upload each month."
+        )
+
+
 def page_book(tenant: dict, roster) -> None:
     st.title("My Book")
     if roster is None:
@@ -190,7 +237,7 @@ def workspace() -> None:
         st.divider()
         page = st.radio(
             "Go to",
-            ["Upload", "My Book", "Past Due", "AOR Defense", "Verifications", "Losses"],
+            ["Dashboard", "Upload", "My Book", "Past Due", "AOR Defense", "Verifications", "Losses"],
             key="nav", label_visibility="collapsed",
         )
         st.divider()
@@ -206,6 +253,7 @@ def workspace() -> None:
     # Every analytics page reads the same roster — build it once.
     roster = ingest_service.build_book(agent_id)
     {
+        "Dashboard": page_dashboard,
         "My Book": page_book,
         "Past Due": page_pastdue,
         "AOR Defense": page_aor,
