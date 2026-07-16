@@ -35,8 +35,8 @@ iMessage alerts · GoHighLevel · carrier-portal auto-scraping · launchd watche
 - **Auth:** simple per-agent login; multi-tenant from day one.
 
 ## Build roadmap
-- [ ] **1. Tenant shell** — login, per-agent data folders, session scoping
-- [ ] **2. Upload flow** — drag-drop HealthSherpa/carrier CSV → ingest into the agent's folder
+- [x] **1. Tenant shell** — login, per-agent data folders, session scoping ✅ (core/tenants.py, core/paths.py, app.py)
+- [ ] **2. Upload flow** — drag-drop HealthSherpa/carrier CSV → ingest into the agent's folder ← next
 - [ ] **3. Port pages** — book, renewals, losses, past-due, commissions, AOR Defense
       (strip the Sheets/GHL/iMessage wiring from the copied `app.py` / `report.py`)
 - [ ] **4. Onboard brother** — first real account, real data, feedback
