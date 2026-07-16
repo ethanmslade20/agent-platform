@@ -479,6 +479,28 @@ _US_STATES = ["AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "FL", "GA", "HI", 
               "NC", "ND", "NE", "NH", "NJ", "NM", "NV", "NY", "OH", "OK", "OR", "PA", "RI",
               "SC", "SD", "TN", "TX", "UT", "VA", "VT", "WA", "WI", "WV", "WY"]
 
+# Friendly carrier name → keyword(s) matched (case-insensitive substring) against
+# the client's carrier. Stored appointments hold the keywords.
+_CARRIERS_UI = {
+    "Ambetter": ["ambetter"],
+    "Oscar": ["oscar"],
+    "Anthem / Wellpoint": ["anthem", "wellpoint"],
+    "UnitedHealthcare": ["united", "uhc"],
+    "Blue Cross Blue Shield": ["blue cross", "blue shield", "bcbs", "bcbst"],
+    "Cigna": ["cigna"],
+    "Molina": ["molina"],
+    "Aetna / Coventry": ["aetna", "coventry"],
+    "CareSource": ["caresource"],
+    "SelectHealth": ["selecthealth", "select health"],
+    "Allstate": ["allstate"],
+    "Golden Rule": ["golden rule"],
+}
+
+
+def _carriers_for(keywords: list) -> list:
+    kw = [str(x).lower() for x in (keywords or [])]
+    return [name for name, ks in _CARRIERS_UI.items() if any(k in kw for k in ks)]
+
 
 def page_settings(tenant: dict, roster) -> None:
     st.title("Settings")
@@ -498,17 +520,41 @@ def page_settings(tenant: dict, roster) -> None:
                 st.session_state.tenant["npn"] = npn.strip()
                 st.success("Saved. Re-upload your export so it re-scopes to your clients.")
 
-    # ── Licensed states ───────────────────────────────────────────────────────
+    # ── States & carrier appointments ─────────────────────────────────────────
     with st.container(border=True):
-        st.markdown(ui.chart_head("Licensed states", "Only clients in these states count in your book "
-                                  "(leave empty to include all)", "pin"), unsafe_allow_html=True)
-        with st.form("states_form"):
-            picked = st.multiselect("States you're licensed in", _US_STATES,
-                                    default=[s for s in cfg.get("licensed_states", []) if s in _US_STATES])
-            if st.form_submit_button("Save states", type="primary"):
-                settings.save(agent_id, {**cfg, "licensed_states": picked})
-                st.success("Saved.")
-                st.rerun()
+        st.markdown(ui.chart_head("States & carrier appointments",
+                                  "Only clients in these states, on carriers you're appointed with, "
+                                  "count in your book", "pin"), unsafe_allow_html=True)
+        appts = cfg.get("appointments", {}) or {}
+
+        if appts:
+            rows = [{"State": s, "Appointed carriers": ", ".join(_carriers_for(kw)) or ", ".join(kw)}
+                    for s, kw in sorted(appts.items())]
+            st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+        else:
+            st.caption("No states added yet — add the states you write business in below "
+                       "(leave this empty to include every state).")
+
+        st.markdown("**Add or edit a state**")
+        stt = st.selectbox("State", _US_STATES, key="appt_state")
+        default_c = _carriers_for(appts.get(stt, []))
+        picked = st.multiselect(f"Carriers you're appointed with in {stt}",
+                                list(_CARRIERS_UI), default=default_c, key=f"appt_carriers_{stt}")
+        b1, b2 = st.columns(2)
+        if b1.button(f"Save {stt}", type="primary", use_container_width=True):
+            kws = sorted({k for c in picked for k in _CARRIERS_UI[c]})
+            new = {**appts}
+            if kws:
+                new[stt] = kws
+            else:
+                new.pop(stt, None)
+            settings.save(agent_id, {**cfg, "appointments": new})
+            st.success(f"Saved {stt}.")
+            st.rerun()
+        if stt in appts and b2.button(f"Remove {stt}", use_container_width=True):
+            settings.save(agent_id, {**cfg, "appointments": {k: v for k, v in appts.items() if k != stt}})
+            st.success(f"Removed {stt}.")
+            st.rerun()
 
     # ── Excluded clients ──────────────────────────────────────────────────────
     with st.container(border=True):
