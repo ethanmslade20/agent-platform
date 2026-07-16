@@ -34,3 +34,6 @@ carrier_books/
 followup_books/
 commission_statements/
 licenses/
+
+# personal-app reference (contains Ethan's PIN/token) — never publish
+app_reference.py
