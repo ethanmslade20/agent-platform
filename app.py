@@ -11,7 +11,8 @@ import os
 import pandas as pd
 import streamlit as st
 
-from core import charts, daily, dashboard_kpis, ingest_service, paths, settings, tenants, ui, views
+from core import (charts, daily, dashboard_kpis, ingest_service, paths, settings, tenants,
+                  ui, updates, views)
 
 # The product name your agents see. Placeholder — change it here anytime.
 APP_NAME = "Agent Book"
@@ -199,8 +200,12 @@ def page_upload(tenant: dict) -> None:
                     icon="⚠️",
                 )
             else:
-                st.success(f"Done — read {len(df):,} rows. Your book is on the **My Book** page.")
-                st.session_state["nav"] = "My Book"
+                roster = ingest_service.build_book(agent_id, tenant.get("npn", ""), tenant.get("name", ""))
+                if roster is not None:
+                    updates.compute_and_log(agent_id, roster)
+                st.success(f"Done — read {len(df):,} rows. Your update summary is on the "
+                           f"**Book Updates** page.")
+                st.session_state["nav"] = "Book Updates"
         except (Exception, SystemExit) as e:
             st.error(f"Couldn't read that file: {e}")
 
@@ -248,6 +253,35 @@ def _hdr(title: str, icon: str) -> None:
 
 def _stat(html: str) -> None:
     st.columns(3)[0].markdown(html, unsafe_allow_html=True)
+
+
+def page_updates(tenant: dict, roster) -> None:
+    st.title("Book Updates")
+    st.caption("What changed each time you uploaded — the same rundown you'd get by text.")
+    hist = updates.history(tenant["agent_id"])
+    if not hist:
+        st.info("No updates yet — upload a HealthSherpa export and your summary shows up here.", icon="📥")
+        return
+    for e in hist:
+        with st.container(border=True):
+            st.markdown(f"**📘 Book updated · {e.get('date', '')}**")
+            if e.get("first"):
+                st.caption("First upload — baseline set. Changes show here starting with your next upload.")
+                continue
+            st.markdown(f"✅ **Signed:** {e.get('signed', 0)} new policies / {e.get('members', 0)} members")
+            lost, taken = e.get("lost", []), e.get("taken", [])
+            vexp, won = e.get("vexp", []), e.get("won", [])
+            if not lost and not taken:
+                st.markdown("⬇️ **Lost 0 clients — all clear.**")
+            else:
+                if lost:
+                    st.markdown(f"⬇️ **Cancelled (→ Re-Engage):** {', '.join(lost)}")
+                if taken:
+                    st.markdown(f"🔻 **Taken by another agent:** {', '.join(taken)}")
+            if vexp:
+                st.markdown(f"⚠️ **Verification expired (still active, needs docs):** {', '.join(vexp)}")
+            if won:
+                st.markdown(f"🎉 **Won back:** {', '.join(won)}")
 
 
 def page_dashboard(tenant: dict, roster) -> None:
@@ -645,30 +679,30 @@ def page_pastdue(tenant: dict, roster) -> None:
 # Nav order matters — the section labels + bottom divider are painted by CSS
 # (nth-of-type), so keep group starts at positions 1 / 4 / 7 / 9 and the
 # Upload+Settings pair last (13, 14).
-_NAV = ["Dashboard", "Daily Tracker", "Goals",
+_NAV = ["Dashboard", "Book Updates", "Daily Tracker", "Goals",
         "Client Lookup", "Book", "Monthly Trends",
         "Commissions", "Past Due",
         "AOR Defense", "Verifications", "Re-Engage", "AEP Tracker",
         "Upload", "Settings"]
 
 _PAGES = {
-    "Dashboard": page_dashboard, "Daily Tracker": page_daily, "Goals": page_goals,
-    "Client Lookup": page_client_lookup, "Book": page_book, "Monthly Trends": page_trends,
-    "Commissions": page_commissions, "Past Due": page_pastdue,
+    "Dashboard": page_dashboard, "Book Updates": page_updates, "Daily Tracker": page_daily,
+    "Goals": page_goals, "Client Lookup": page_client_lookup, "Book": page_book,
+    "Monthly Trends": page_trends, "Commissions": page_commissions, "Past Due": page_pastdue,
     "AOR Defense": page_aor, "Verifications": page_verifications,
     "Re-Engage": page_losses, "AEP Tracker": page_aep, "Settings": page_settings,
 }
-_NO_ROSTER = {"Upload", "Settings", "Goals", "AEP Tracker"}
+_NO_ROSTER = {"Upload", "Settings", "Goals", "AEP Tracker", "Book Updates"}
 
 
 def _nav_css() -> None:
     sb = 'section[data-testid="stSidebar"] div[role="radiogroup"] > label'
     css = [f'{sb}::before{{content:none;}}']  # drop the empty icon slots (per-item icons not ported)
-    for i, title in [(1, "OVERVIEW"), (4, "CLIENTS"), (7, "MONEY"), (9, "FOLLOW UPS")]:
+    for i, title in [(1, "OVERVIEW"), (5, "CLIENTS"), (8, "MONEY"), (10, "FOLLOW UPS")]:
         css.append(f'{sb}:nth-of-type({i}){{margin-top:{12 if i == 1 else 22}px;position:relative;overflow:visible;}}')
         css.append(f'{sb}:nth-of-type({i})::after{{content:"{title}";position:absolute;top:-15px;left:10px;'
                    f'font-size:.64rem;letter-spacing:.13em;color:#6b84ad;font-weight:700;}}')
-    css.append(f'{sb}:nth-of-type(13){{margin-top:26px;border-top:1px solid rgba(96,165,250,0.18);padding-top:12px;}}')
+    css.append(f'{sb}:nth-of-type(14){{margin-top:26px;border-top:1px solid rgba(96,165,250,0.18);padding-top:12px;}}')
     st.markdown(f"<style>{''.join(css)}</style>", unsafe_allow_html=True)
 
 
