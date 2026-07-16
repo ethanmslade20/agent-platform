@@ -97,7 +97,7 @@ def build_book(agent_id: str, npn: str = "", name: str = ""):
     """The agent's person-level roster from everything they've uploaded, with the
     same active-book rules Ethan's site applies (AOR-taken + verification-expired
     pulled out of active). None if they have no book yet."""
-    from core import rules
+    from core import rules, settings
     snap_dir = paths.snapshots_dir(agent_id)
     # On the host, the local cache may be empty (fresh container) — pull the
     # tenant's files back from the database before building.
@@ -109,4 +109,5 @@ def build_book(agent_id: str, npn: str = "", name: str = ""):
     roster = build_all_clients(months)
     if roster is None or roster.empty:
         return None
-    return rules.apply_book_rules(roster, npn, name)
+    roster = rules.apply_book_rules(roster, npn, name)
+    return rules.apply_agent_settings(roster, settings.get(agent_id))

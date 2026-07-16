@@ -11,7 +11,7 @@ import os
 import pandas as pd
 import streamlit as st
 
-from core import charts, daily, dashboard_kpis, ingest_service, paths, tenants, ui, views
+from core import charts, daily, dashboard_kpis, ingest_service, paths, settings, tenants, ui, views
 
 # The product name your agents see. Placeholder — change it here anytime.
 APP_NAME = "Agent Book"
@@ -474,24 +474,64 @@ def page_aep(tenant: dict, roster) -> None:
     st.info("The open-enrollment re-enrollment tracker (keep / switch / done per client) is on the way.", icon="🗂️")
 
 
+_US_STATES = ["AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "FL", "GA", "HI", "IA", "ID",
+              "IL", "IN", "KS", "KY", "LA", "MA", "MD", "ME", "MI", "MN", "MO", "MS", "MT",
+              "NC", "ND", "NE", "NH", "NJ", "NM", "NV", "NY", "OH", "OK", "OR", "PA", "RI",
+              "SC", "SD", "TN", "TX", "UT", "VA", "VT", "WA", "WI", "WV", "WY"]
+
+
 def page_settings(tenant: dict, roster) -> None:
     st.title("Settings")
+    agent_id = tenant["agent_id"]
+    cfg = settings.get(agent_id)
+
+    # ── Profile / NPN ─────────────────────────────────────────────────────────
     with st.container(border=True):
         st.markdown(ui.chart_head("Your profile", "Your NPN keeps your book scoped to you", "shield"),
                     unsafe_allow_html=True)
         st.write(f"**Agent:** {tenant.get('name') or tenant.get('username')}")
         with st.form("npn_form"):
-            npn = st.text_input(
-                "Your NPN (National Producer Number)", value=tenant.get("npn", ""),
-                help="This keeps only YOUR clients when you upload. Set it before your first upload.")
-            saved = st.form_submit_button("Save NPN", type="primary")
-        if saved:
-            tenants.update_npn(tenant["username"], npn)
-            st.session_state.tenant["npn"] = npn.strip()
-            st.success("Saved. If you already uploaded, re-upload your HealthSherpa export so it "
-                       "filters to your clients.")
-        st.write(f"**Private workspace:** `tenants/{tenant['agent_id']}/`")
-    st.caption("Change-password and licensed-states settings are coming soon.")
+            npn = st.text_input("Your NPN (National Producer Number)", value=tenant.get("npn", ""),
+                                help="Keeps only YOUR clients when you upload. Set it before your first upload.")
+            if st.form_submit_button("Save NPN", type="primary"):
+                tenants.update_npn(tenant["username"], npn)
+                st.session_state.tenant["npn"] = npn.strip()
+                st.success("Saved. Re-upload your export so it re-scopes to your clients.")
+
+    # ── Licensed states ───────────────────────────────────────────────────────
+    with st.container(border=True):
+        st.markdown(ui.chart_head("Licensed states", "Only clients in these states count in your book "
+                                  "(leave empty to include all)", "pin"), unsafe_allow_html=True)
+        with st.form("states_form"):
+            picked = st.multiselect("States you're licensed in", _US_STATES,
+                                    default=[s for s in cfg.get("licensed_states", []) if s in _US_STATES])
+            if st.form_submit_button("Save states", type="primary"):
+                settings.save(agent_id, {**cfg, "licensed_states": picked})
+                st.success("Saved.")
+                st.rerun()
+
+    # ── Excluded clients ──────────────────────────────────────────────────────
+    with st.container(border=True):
+        st.markdown(ui.chart_head("Excluded clients", "Hidden from your book entirely (e.g. never-sold "
+                                  "noise)", "minus"), unsafe_allow_html=True)
+        excl = cfg.get("exclusions", [])
+        if excl:
+            st.dataframe(pd.DataFrame(excl).rename(columns={"first": "First", "last": "Last", "state": "State"}),
+                         use_container_width=True, hide_index=True)
+        else:
+            st.caption("None yet.")
+        with st.form("excl_form"):
+            c1, c2, c3 = st.columns(3)
+            f = c1.text_input("First name")
+            l = c2.text_input("Last name")
+            s = c3.text_input("State", max_chars=2, placeholder="GA")
+            if st.form_submit_button("Add exclusion") and f.strip() and l.strip():
+                excl = excl + [{"first": f.strip(), "last": l.strip(), "state": s.strip().upper()}]
+                settings.save(agent_id, {**cfg, "exclusions": excl})
+                st.success(f"Excluded {f} {l}.")
+                st.rerun()
+
+    st.caption(f"Private workspace · `tenants/{agent_id}/`")
 
 
 def page_book(tenant: dict, roster) -> None:

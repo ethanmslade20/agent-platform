@@ -70,3 +70,26 @@ def apply_book_rules(roster: pd.DataFrame, npn: str = "", name: str = "") -> pd.
         df.loc[tag, "cancel_reason"] = REASON_TAKEN
 
     return df
+
+
+def apply_agent_settings(roster: pd.DataFrame, settings: dict) -> pd.DataFrame:
+    """Per-agent filters: keep only licensed states, and drop manually-excluded
+    clients (matched by name + state). Empty settings = no filtering."""
+    df = roster
+    states = [s.strip().upper() for s in (settings.get("licensed_states") or []) if s.strip()]
+    if states and "state" in df.columns:
+        df = df[df["state"].astype(str).str.upper().isin(states)]
+
+    excl = settings.get("exclusions") or []
+    if excl and {"first_name", "last_name"}.issubset(df.columns):
+        keys = {(str(e.get("first", "")).lower().strip(),
+                 str(e.get("last", "")).lower().strip(),
+                 str(e.get("state", "")).upper().strip()) for e in excl}
+
+        def _is_excluded(r) -> bool:
+            return (str(r.get("first_name", "")).lower().strip(),
+                    str(r.get("last_name", "")).lower().strip(),
+                    str(r.get("state", "")).upper().strip()) in keys
+
+        df = df[~df.apply(_is_excluded, axis=1)]
+    return df.copy()
