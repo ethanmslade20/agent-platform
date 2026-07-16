@@ -110,4 +110,12 @@ def build_book(agent_id: str, npn: str = "", name: str = ""):
     if roster is None or roster.empty:
         return None
     roster = rules.apply_book_rules(roster, npn, name)
+    # Clients who vanished from the latest export left the book — mark Cancelled
+    # (matches Ethan's site: anyone who dropped off is treated as cancelled).
+    if "last_seen" in roster.columns and months:
+        latest = max(months.keys())
+        gone = (roster["last_seen"].astype(str) < latest) & roster["status"].isin(rules.ACTIVE)
+        roster.loc[gone, "status"] = "Cancelled"
+        if "cancel_reason" in roster.columns:
+            roster.loc[gone & (roster["cancel_reason"] == ""), "cancel_reason"] = "Left book"
     return rules.apply_agent_settings(roster, settings.get(agent_id))

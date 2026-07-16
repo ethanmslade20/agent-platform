@@ -73,11 +73,31 @@ def apply_book_rules(roster: pd.DataFrame, npn: str = "", name: str = "") -> pd.
 
 
 def apply_agent_settings(roster: pd.DataFrame, settings: dict) -> pd.DataFrame:
-    """Per-agent filters: keep only licensed states, and drop manually-excluded
-    clients (matched by name + state). Empty settings = no filtering."""
+    """Per-agent filters. Precision order:
+      1. appointments {state: [carrier keywords]} — keep only clients whose carrier
+         the agent is appointed with in that state (matches Ethan's exact filter);
+      2. else licensed_states — simple state-level keep;
+      3. always: drop manually-excluded clients (by name + state).
+    Empty settings = no filtering (a new agent includes everything)."""
     df = roster
+    appts = settings.get("appointments") or {}
     states = [s.strip().upper() for s in (settings.get("licensed_states") or []) if s.strip()]
-    if states and "state" in df.columns:
+
+    if appts and {"state", "carrier"}.issubset(df.columns):
+        appt_u = {str(k).upper(): [str(x).lower() for x in v] for k, v in appts.items()}
+
+        def _appointed(r) -> bool:
+            st = str(r.get("state", "")).upper().strip()
+            c = str(r.get("carrier", "")).lower().strip()
+            if not st or not c:
+                return True
+            kw = appt_u.get(st)
+            if not kw:
+                return False  # not appointed in that state at all
+            return any(k in c for k in kw)
+
+        df = df[df.apply(_appointed, axis=1)]
+    elif states and "state" in df.columns:
         df = df[df["state"].astype(str).str.upper().isin(states)]
 
     excl = settings.get("exclusions") or []
