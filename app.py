@@ -606,7 +606,8 @@ def workspace() -> None:
     if page == "Upload":
         page_upload(tenant)
         return
-    roster = None if page in _NO_ROSTER else ingest_service.build_book(agent_id)
+    roster = (None if page in _NO_ROSTER
+              else ingest_service.build_book(agent_id, tenant.get("npn", ""), tenant.get("name", "")))
     _PAGES[page](tenant, roster)
 
 

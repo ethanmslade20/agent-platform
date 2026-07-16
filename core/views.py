@@ -26,8 +26,13 @@ def active(roster: pd.DataFrame) -> pd.DataFrame:
 
 
 def losses(roster: pd.DataFrame) -> pd.DataFrame:
-    """Clients who cancelled or terminated — the re-engage list."""
-    return roster[roster["status"].isin(LOST)].copy()
+    """Genuine cancellations/terminations — the re-engage list. Excludes clients
+    who churned only because they were taken by another agent or lost a
+    verification (those have their own pages), matching Ethan's site."""
+    churned = roster[roster["status"].isin(LOST)]
+    if "cancel_reason" in churned.columns:
+        churned = churned[~churned["cancel_reason"].isin(["AOR taken", "Verification expired"])]
+    return churned.copy()
 
 
 def aor_taken(roster: pd.DataFrame, npn: str = "", name: str = "") -> pd.DataFrame:

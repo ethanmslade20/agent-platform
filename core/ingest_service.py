@@ -93,8 +93,11 @@ def save_carrier(agent_id: str, carrier: str, data: bytes) -> Path:
     return dest
 
 
-def build_book(agent_id: str):
-    """The agent's person-level roster from everything they've uploaded, or None."""
+def build_book(agent_id: str, npn: str = "", name: str = ""):
+    """The agent's person-level roster from everything they've uploaded, with the
+    same active-book rules Ethan's site applies (AOR-taken + verification-expired
+    pulled out of active). None if they have no book yet."""
+    from core import rules
     snap_dir = paths.snapshots_dir(agent_id)
     # On the host, the local cache may be empty (fresh container) — pull the
     # tenant's files back from the database before building.
@@ -104,4 +107,6 @@ def build_book(agent_id: str):
     if not months:
         return None
     roster = build_all_clients(months)
-    return roster if roster is not None and not roster.empty else None
+    if roster is None or roster.empty:
+        return None
+    return rules.apply_book_rules(roster, npn, name)
