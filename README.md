@@ -37,10 +37,9 @@ iMessage alerts · GoHighLevel · carrier-portal auto-scraping · launchd watche
 ## Build roadmap
 - [x] **1. Tenant shell** — login, per-agent data folders, session scoping ✅ (core/tenants.py, core/paths.py, app.py)
 - [x] **2. Upload flow** — drag-drop HealthSherpa/carrier CSV → ingest into the agent's folder ✅ (core/ingest_service.py, upload + My Book pages)
-- [ ] **3. Port pages** ← next
-      → — book, renewals, losses, past-due, commissions, AOR Defense
-      (strip the Sheets/GHL/iMessage wiring from the copied `app.py` / `report.py`)
-- [ ] **4. Onboard brother** — first real account, real data, feedback
+- [x] **3. Port pages** ✅ — My Book, Past Due, AOR Defense, Verifications, Losses (core/views.py)
+      Deferred: commissions/disputes (needs a per-agent payment source) + renewals (needs prior-year data)
+- [ ] **4. Onboard brother** — first real account, real data, feedback ← next
 - [ ] **5. Grow** — add accounts; revisit hosting/billing only if it proves out
 
 ## Status

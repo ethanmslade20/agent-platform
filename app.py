@@ -7,7 +7,7 @@ Phase 2: in-app upload (HealthSherpa builds the book; carriers stored for reconc
 import pandas as pd
 import streamlit as st
 
-from core import ingest_service, paths, tenants
+from core import ingest_service, paths, tenants, views
 
 # The product name your agents see. Placeholder — change it here anytime.
 APP_NAME = "Agent Book"
@@ -99,29 +99,84 @@ def page_upload(tenant: dict) -> None:
                     st.error(f"{spec['label']}: {e}")
 
 
-def page_book(tenant: dict) -> None:
-    agent_id = tenant["agent_id"]
-    st.title("My Book")
-    roster = ingest_service.build_book(agent_id)
-    if roster is None:
-        st.info("No book yet — upload your HealthSherpa export on the **Upload** page.", icon="📥")
-        return
+_NAMES = {"first_name": "First", "last_name": "Last", "carrier": "Carrier",
+          "state": "State", "status": "Status", "effective_date": "Effective",
+          "term_date": "Ended", "taken_by": "Now with"}
 
-    active = roster[roster["status"].isin(_ACTIVE)].copy()
-    members = pd.to_numeric(active.get("applicant_count"), errors="coerce").fillna(1).clip(lower=1).sum()
+
+def _table(df: pd.DataFrame, cols: list, empty: str) -> None:
+    if df is None or df.empty:
+        st.info(empty)
+        return
+    show = [c for c in cols if c in df.columns]
+    st.dataframe(df[show].rename(columns=_NAMES), use_container_width=True, hide_index=True)
+
+
+def _need_book() -> None:
+    st.info("No book yet — upload your HealthSherpa export on the **Upload** page.", icon="📥")
+
+
+def page_book(tenant: dict, roster) -> None:
+    st.title("My Book")
+    if roster is None:
+        _need_book(); return
+    a = views.active(roster)
+    members = pd.to_numeric(a.get("applicant_count"), errors="coerce").fillna(1).clip(lower=1).sum()
     c1, c2, c3 = st.columns(3)
-    c1.metric("Active clients", f"{len(active):,}")
+    c1.metric("Active clients", f"{len(a):,}")
     c2.metric("Members", f"{int(members):,}")
     c3.metric("Total on file", f"{len(roster):,}")
-
     st.divider()
-    cols = [c for c in ["first_name", "last_name", "carrier", "state", "status", "effective_date"]
-            if c in active.columns]
-    view = active[cols].rename(columns={
-        "first_name": "First", "last_name": "Last", "carrier": "Carrier",
-        "state": "State", "status": "Status", "effective_date": "Effective",
-    })
-    st.dataframe(view, use_container_width=True, hide_index=True)
+    _table(a, ["first_name", "last_name", "carrier", "state", "status", "effective_date"], "")
+
+
+def page_losses(tenant: dict, roster) -> None:
+    st.title("Losses  ·  Re-Engage")
+    st.caption("Clients who cancelled or terminated — your win-back list.")
+    if roster is None:
+        _need_book(); return
+    lost = views.losses(roster)
+    st.metric("Cancelled / terminated", f"{len(lost):,}")
+    st.divider()
+    _table(lost, ["first_name", "last_name", "carrier", "state", "status", "term_date"],
+           "No losses — everyone's still active. 🎉")
+
+
+def page_aor(tenant: dict, roster) -> None:
+    st.title("AOR Defense")
+    st.caption("Clients another agent is now the agent of record on — your recovery list.")
+    if roster is None:
+        _need_book(); return
+    taken = views.aor_taken(roster, tenant.get("npn", ""), tenant.get("name", ""))
+    st.metric("Taken by another agent", f"{len(taken):,}")
+    st.divider()
+    _table(taken, ["first_name", "last_name", "state", "taken_by", "carrier"],
+           "None taken — you hold every client's AOR. 🛡️")
+
+
+def page_verifications(tenant: dict, roster) -> None:
+    st.title("Verifications")
+    st.caption("Active clients with an expired document check — coverage at risk unless docs go in.")
+    if roster is None:
+        _need_book(); return
+    v = views.verifications(roster)
+    st.metric("Docs expired", f"{len(v):,}")
+    st.divider()
+    _table(v, ["first_name", "last_name", "carrier", "state", "status"],
+           "No expired verifications — you're clean. ✅")
+
+
+def page_pastdue(tenant: dict, roster) -> None:
+    st.title("Past Due")
+    st.caption("Behind-on-payment clients from your Ambetter & Oscar carrier books.")
+    pd_df = views.past_due(tenant["agent_id"])
+    if pd_df is None:
+        st.info("Upload your Ambetter and/or Oscar carrier books on the **Upload** page to "
+                "see who's behind on payment.", icon="📥")
+        return
+    st.metric("Past due", f"{len(pd_df):,}")
+    st.divider()
+    st.dataframe(pd_df, use_container_width=True, hide_index=True)
 
 
 # ── Shell ───────────────────────────────────────────────────────────────────
@@ -133,7 +188,11 @@ def workspace() -> None:
         if tenant.get("npn"):
             st.caption(f"NPN {tenant['npn']}")
         st.divider()
-        page = st.radio("Go to", ["Upload", "My Book"], key="nav", label_visibility="collapsed")
+        page = st.radio(
+            "Go to",
+            ["Upload", "My Book", "Past Due", "AOR Defense", "Verifications", "Losses"],
+            key="nav", label_visibility="collapsed",
+        )
         st.divider()
         st.caption(f"Workspace · tenants/{agent_id}/")
         if st.button("Log out", use_container_width=True):
@@ -142,8 +201,17 @@ def workspace() -> None:
 
     if page == "Upload":
         page_upload(tenant)
-    else:
-        page_book(tenant)
+        return
+
+    # Every analytics page reads the same roster — build it once.
+    roster = ingest_service.build_book(agent_id)
+    {
+        "My Book": page_book,
+        "Past Due": page_pastdue,
+        "AOR Defense": page_aor,
+        "Verifications": page_verifications,
+        "Losses": page_losses,
+    }[page](tenant, roster)
 
 
 if st.session_state.tenant:
