@@ -43,4 +43,7 @@ iMessage alerts · GoHighLevel · carrier-portal auto-scraping · launchd watche
 - [ ] **5. Grow** — add accounts; revisit hosting/billing only if it proves out
 
 ## Status
-Scaffolded 2026-07-16. Engine + reference `app.py` copied. Multi-tenant refactor not started yet.
+2026-07-16 — Phases 1–3 done and verified. Working locally (`commission-tracker/.venv/bin/streamlit run app.py`,
+demo login `demo`/`demo1234`): login + per-tenant isolation, in-app upload, and pages for Dashboard, My Book,
+Past Due, AOR Defense, Verifications, Losses. Not deployed yet (local-only; a real link needs a host + a
+persistent DB, since Streamlit Cloud's filesystem is ephemeral). Next: onboard brother; then the deploy milestone.
