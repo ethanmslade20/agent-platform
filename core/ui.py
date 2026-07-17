@@ -128,10 +128,6 @@ def inject_css():
       section[data-testid="stSidebar"] div[role="radiogroup"] > label:has(input:checked) [data-testid="stMarkdownContainer"] {{
         flex: 1; width: 100%;
       }}
-      section[data-testid="stSidebar"] div[role="radiogroup"] > label:has(input:checked) p::after {{
-        content: ""; margin-left: auto; width: 10px; height: 10px; border-radius: 50%;
-        background: #f43f5e; box-shadow: 0 0 9px rgba(244,63,94,0.85);
-      }}
       /* hide the radio dot so it reads as a clean nav item (streamlit is PINNED
          to 1.50.0 in requirements.txt — an unpinned cloud version rendered a
          different DOM where this rule missed and the dot showed) */
