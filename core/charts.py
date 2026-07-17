@@ -111,6 +111,45 @@ def daily_month_fig(daily_df: pd.DataFrame):
     return fig
 
 
+def goal_growth_figs(hist, pace_df, goal, goal_arr, today):
+    """(members_fig, revenue_fig) — actual vs required-pace lines toward a goal."""
+    today_iso = pd.Timestamp(today).isoformat()
+
+    fm = go.Figure()
+    fm.add_trace(go.Scatter(x=hist["month"], y=hist["active"], mode="lines+markers",
+                            name="Actual", line=dict(color=BLUE, width=3), marker=dict(size=7)))
+    fm.add_trace(go.Scatter(x=pace_df["month"], y=pace_df["required"], mode="lines",
+                            name="Required pace", line=dict(color=GOLD, width=2, dash="dash")))
+    fm.add_hline(y=goal, line_color=GREEN, line_dash="dot", line_width=1.5,
+                 annotation_text=f"Goal: {goal:,}", annotation_position="top left",
+                 annotation_font_color=GREEN)
+    fm.add_vline(x=today_iso, line_color="#94a3b8", line_dash="dot", line_width=1,
+                 annotation_text="Today", annotation_position="top right", annotation_font_color="#94a3b8")
+    fm.update_layout(**ui._chart_layout(
+        xaxis=dict(showgrid=False, title=""),
+        yaxis=dict(showgrid=True, gridcolor="rgba(96,165,250,0.10)", title="Active members"),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        margin=dict(l=0, r=0, t=30, b=0), height=360))
+
+    fr = go.Figure()
+    fr.add_trace(go.Scatter(x=hist["month"], y=hist["arr"], mode="lines+markers",
+                            name="Actual ARR", line=dict(color=GREEN, width=3), marker=dict(size=7)))
+    fr.add_trace(go.Scatter(x=pace_df["month"], y=pace_df["required_arr"], mode="lines",
+                            name="Required pace", line=dict(color=GOLD, width=2, dash="dash")))
+    fr.add_hline(y=goal_arr, line_color=GREEN, line_dash="dot", line_width=1.5,
+                 annotation_text=f"Goal ARR: ${goal_arr:,.0f}", annotation_position="top left",
+                 annotation_font_color=GREEN)
+    fr.add_vline(x=today_iso, line_color="#94a3b8", line_dash="dot", line_width=1,
+                 annotation_text="Today", annotation_position="top right", annotation_font_color="#94a3b8")
+    fr.update_layout(**ui._chart_layout(
+        xaxis=dict(showgrid=False, title=""),
+        yaxis=dict(showgrid=True, gridcolor="rgba(96,165,250,0.10)", title="Annual Revenue ($)",
+                   tickprefix="$", tickformat=",.0f"),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        margin=dict(l=0, r=0, t=30, b=0), height=360))
+    return fm, fr
+
+
 def daily_new_fig(roster: pd.DataFrame):
     col = "submission_date" if "submission_date" in roster.columns else "effective_date"
     if col not in roster.columns:

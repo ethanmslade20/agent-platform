@@ -518,50 +518,273 @@ def page_commissions(tenant: dict, roster) -> None:
     ])
 
 
+# Goal input-card icons + KPI-tile styling (mirrors Ethan's Goals page look).
+_G_USERS = ("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' "
+            "fill='none' stroke='%23a78bfa' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'>"
+            "<path d='M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2'/><circle cx='9' cy='7' r='4'/>"
+            "<path d='M23 21v-2a4 4 0 0 0-3-3.87'/><path d='M16 3.13a4 4 0 0 1 0 7.75'/></svg>")
+_G_CAL = ("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' "
+          "fill='none' stroke='%23a78bfa' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'>"
+          "<rect x='3' y='4' width='18' height='18' rx='2' ry='2'/><line x1='16' y1='2' x2='16' y2='6'/>"
+          "<line x1='8' y1='2' x2='8' y2='6'/><line x1='3' y1='10' x2='21' y2='10'/></svg>")
+
+_GOALS_CSS = f"""
+<style>
+  .st-key-goal_card_members, .st-key-goal_card_date {{
+    position:relative; border-radius:20px; background:#0c1424;
+    padding:30px 30px 30px 112px; min-height:132px; justify-content:center;
+  }}
+  .st-key-goal_card_members {{ box-shadow:0 0 24px rgba(139,92,246,.16); }}
+  .st-key-goal_card_members::before {{
+    content:""; position:absolute; inset:0; border-radius:20px; padding:1.5px;
+    background:linear-gradient(120deg,#4285F4,#8b5cf6 55%,#b06ef7);
+    -webkit-mask:linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite:xor; mask-composite:exclude; pointer-events:none;
+  }}
+  .st-key-goal_card_date {{ box-shadow:0 0 20px rgba(66,133,244,.10); }}
+  .st-key-goal_card_date::before {{
+    content:""; position:absolute; inset:0; border-radius:20px; padding:1.5px;
+    background:linear-gradient(120deg,rgba(66,133,244,.55),rgba(96,120,200,.30));
+    -webkit-mask:linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite:xor; mask-composite:exclude; pointer-events:none;
+  }}
+  .st-key-goal_card_members::after, .st-key-goal_card_date::after {{
+    content:""; position:absolute; left:28px; top:50%; transform:translateY(-50%);
+    width:56px; height:56px; border-radius:16px; background-color:#161f38;
+    background-repeat:no-repeat; background-position:center; background-size:28px 28px;
+    box-shadow:inset 0 0 0 1px rgba(139,92,246,.28); pointer-events:none;
+  }}
+  .st-key-goal_card_members::after {{ background-image:url("{_G_USERS}"); }}
+  .st-key-goal_card_date::after    {{ background-image:url("{_G_CAL}"); }}
+  .st-key-goal_card_members [data-testid="stWidgetLabel"] p,
+  .st-key-goal_card_date [data-testid="stWidgetLabel"] p {{ font-size:.85rem !important; color:#8aacd6 !important; }}
+  .st-key-goal_card_members [data-testid="stNumberInputContainer"],
+  .st-key-goal_card_members div[data-baseweb="input"],
+  .st-key-goal_card_members div[data-baseweb="input"] > div,
+  .st-key-goal_card_members [data-baseweb="base-input"],
+  .st-key-goal_card_date div[data-baseweb="input"],
+  .st-key-goal_card_date div[data-baseweb="input"] > div,
+  .st-key-goal_card_date [data-baseweb="base-input"] {{
+    background:transparent !important; border:none !important; box-shadow:none !important;
+  }}
+  .st-key-goal_card_members input, .st-key-goal_card_date input {{
+    font-size:1.9rem !important; font-weight:700 !important; color:#f2f5fb !important;
+    background:transparent !important; padding-left:0 !important;
+  }}
+  .st-key-goal_card_members button[data-testid*="StepDown"],
+  .st-key-goal_card_members button[data-testid*="StepUp"] {{
+    background:transparent !important; border-radius:0 !important;
+    border-left:1px solid rgba(138,172,214,.18) !important; width:54px !important; color:#e8edf5 !important;
+  }}
+  .st-key-goal_card_members button[data-testid*="StepDown"]:hover,
+  .st-key-goal_card_members button[data-testid*="StepUp"]:hover {{ background:rgba(139,92,246,.12) !important; }}
+  .goal-kpi-box {{
+    background:#0c1424; border:1px solid rgba(96,165,250,0.16); border-radius:16px;
+    padding:22px 20px 18px; height:100%; transition:transform .15s ease, border-color .15s ease;
+  }}
+  .goal-kpi-box:hover {{ transform:translateY(-2px); border-color:rgba(96,165,250,0.5); }}
+  .goal-kpi-value {{ font-size:2.6rem; font-weight:800; color:#60a5fa; line-height:1.1; }}
+  .goal-kpi-value.green {{ color:#22c55e; }}
+  .goal-kpi-value.gold  {{ color:#f59e0b; }}
+  .goal-kpi-value.red   {{ color:#ef4444; }}
+  .goal-kpi-label {{ font-size:.72rem; color:#8aacd6; margin-top:6px; text-transform:uppercase; letter-spacing:.06em; }}
+  .goal-kpi-sub {{ font-size:.82rem; color:#8aacd6; margin-top:4px; }}
+</style>
+"""
+
+
+def _goal_kpi(label, value, sub, color=""):
+    return (f'<div class="goal-kpi-box"><div class="goal-kpi-value {color}">{value}</div>'
+            f'<div class="goal-kpi-label">{label}</div><div class="goal-kpi-sub">{sub}</div></div>')
+
+
 def page_goals(tenant: dict, roster) -> None:
-    st.title("Goals")
-    st.caption("Set your monthly targets and track this month's progress.")
+    PMPM, MAX_TENURE = 23, 60
+    TODAY = dt.date.today()
     agent_id = tenant["agent_id"]
     cfg = settings.get(agent_id)
     goals = cfg.get("goals") or {}
 
-    with st.container(border=True):
-        st.markdown(ui.section_header("Monthly Targets", "trend"), unsafe_allow_html=True)
-        with st.form("goals_form"):
-            c1, c2 = st.columns(2)
-            gp = c1.number_input("New policies / month", min_value=0, step=5,
-                                 value=int(goals.get("policies", 0)))
-            gm = c2.number_input("New members / month", min_value=0, step=5,
-                                 value=int(goals.get("members", 0)))
-            if st.form_submit_button("Save targets", type="primary"):
-                settings.save(agent_id, {**cfg, "goals": {"policies": int(gp), "members": int(gm)}})
-                st.success("Targets saved.")
-                st.rerun()
+    st.title("Goals")
+    st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
+    st.markdown(ui.section_header("Set your goal", "target"), unsafe_allow_html=True)
+    st.markdown(_GOALS_CSS, unsafe_allow_html=True)
+
+    prev_members = int(goals.get("members", 2000) or 2000)
+    try:
+        prev_date = dt.date.fromisoformat(goals.get("date")) if goals.get("date") else dt.date(2027, 2, 1)
+    except (TypeError, ValueError):
+        prev_date = dt.date(2027, 2, 1)
+
+    gi1, gi2 = st.columns(2, gap="large")
+    with gi1, st.container(key="goal_card_members"):
+        GOAL = st.number_input("Member goal", min_value=1, value=prev_members, step=50)
+    with gi2, st.container(key="goal_card_date"):
+        GOAL_DATE = st.date_input("Target date", value=prev_date)
+    if GOAL != prev_members or GOAL_DATE != prev_date:
+        settings.save(agent_id, {**cfg, "goals": {"members": int(GOAL), "date": GOAL_DATE.isoformat()}})
 
     if roster is None:
         _need_book(); return
-    months_av = daily.months_available(roster)
-    if not months_av:
-        st.info("No dated policies yet — your progress fills in once you upload."); return
+    d = dashboard_kpis.compute(agent_id, roster)
+    if d is None:
+        _need_book(); return
 
-    ym = months_av[0]  # most recent month of new business
-    ddf = daily.daily_counts(roster, ym)
-    pol_now, mem_now = int(ddf["Policies"].sum()), int(ddf["Members"].sum())
-    month_label = pd.Timestamp(ym + "-01").strftime("%B %Y")
+    mom = d.get("mom")
+    current = int(d["members"])
+    avg_hh = d["household"] or 1.0
+    goal_policies = round(GOAL / max(avg_hh, 1))
+    st.markdown(
+        f'<p style="color:#8aacd6;font-size:0.95rem;margin-top:-6px;">'
+        f'<b style="color:#e8edf5">{GOAL:,} members</b> ≈ '
+        f'<b style="color:#4285F4">{goal_policies:,} policies</b> '
+        f'(based on your avg household size of {avg_hh:.2f})</p>', unsafe_allow_html=True)
+    st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
 
+    gap = max(GOAL - current, 0)
+    pct_done = min(current / GOAL * 100, 100) if GOAL else 0
+
+    # LTV from all-time churn
+    if mom is not None and not mom.empty and {"Members Lost", "Total Members"}.issubset(mom.columns):
+        churn_rate = mom["Members Lost"].sum() / max(mom["Total Members"].sum(), 1)
+    else:
+        churn_rate = 0.0
+    implied_tenure = min(1 / churn_rate if churn_rate > 0 else MAX_TENURE, MAX_TENURE)
+    ltv_per = round(PMPM * implied_tenure)
+
+    current_mrr, current_arr = current * PMPM, current * PMPM * 12
+    current_book_ltv = current * ltv_per
+    goal_mrr, goal_arr = GOAL * PMPM, GOAL * PMPM * 12
+    revenue_gap_arr = goal_arr - current_arr
+
+    days_left = (GOAL_DATE - TODAY).days
+    months_left = max(round(days_left / 30.44, 1), 0.1)
+    weeks_left = max(round(days_left / 7, 1), 0.1)
+    needed_per_day = round(gap / days_left, 2) if days_left > 0 else 0
+    needed_per_week = round(gap / weeks_left, 1) if weeks_left > 0 else 0
+    needed_per_mo = round(gap / months_left, 1) if months_left > 0 else 0
+
+    if mom is not None and not mom.empty and {"New Members", "Members Lost"}.issubset(mom.columns):
+        recent_growth = (mom["New Members"] - mom["Members Lost"]).tail(3).mean()
+    else:
+        recent_growth = 0.0
+    projected = round(current + recent_growth * months_left)
+    projected_arr = projected * PMPM * 12
+    on_track = projected >= GOAL
+
+    st.markdown(
+        f'<p style="color:#8aacd6;font-size:0.95rem;">LTV: all-time churn '
+        f'({churn_rate*100:.2f}%/mo → {implied_tenure:.0f}-mo tenure → '
+        f'<b style="color:#2ecc71">${ltv_per:,}/member</b>)</p>', unsafe_allow_html=True)
+
+    # Dual progress bars
+    rev_pct = min(current_arr / goal_arr * 100, 100) if goal_arr else 0
+    bar_c = "#2ecc71" if pct_done >= 75 else ("#f39c12" if pct_done >= 40 else "#4285F4")
+    rev_c = "#2ecc71" if rev_pct >= 75 else ("#f39c12" if rev_pct >= 40 else "#4285F4")
+    st.markdown(f"""
+      <div style="margin-bottom:4px;display:flex;justify-content:space-between;font-size:0.85rem;color:#8aacd6;">
+        <span>Members &nbsp;<b style="color:#fff">{current:,}</b></span>
+        <span><b style="color:#fff">{pct_done:.1f}%</b> of {GOAL:,}</span>
+        <span><b>{gap:,} to go &nbsp;·&nbsp; {days_left:,} days left</b></span></div>
+      <div class="progress-wrap" style="margin-bottom:14px;"><div class="progress-bar" style="width:{pct_done:.1f}%;background:{bar_c};"></div></div>
+      <div style="margin-bottom:4px;display:flex;justify-content:space-between;font-size:0.85rem;color:#8aacd6;">
+        <span>Annual Revenue &nbsp;<b style="color:#fff">${current_arr:,.0f}</b></span>
+        <span><b style="color:#fff">{rev_pct:.1f}%</b> of ${goal_arr:,.0f}</span>
+        <span><b>${revenue_gap_arr:,.0f} ARR to go</b></span></div>
+      <div class="progress-wrap" style="margin-bottom:28px;"><div class="progress-bar" style="width:{rev_pct:.1f}%;background:{rev_c};"></div></div>
+    """, unsafe_allow_html=True)
+
+    st.markdown(ui.section_header("Revenue — where you are now", "dollar"), unsafe_allow_html=True)
+    for col, html in zip(st.columns(4), [
+        _goal_kpi("Monthly Recurring Revenue", f"${current_mrr:,.0f}", f"{current:,} members × ${PMPM}/mo"),
+        _goal_kpi("Annual Run Rate", f"${current_arr:,.0f}", "MRR × 12 months"),
+        _goal_kpi("LTV per Member", f"${ltv_per:,}", f"${PMPM}/mo × {implied_tenure:.0f}-mo tenure"),
+        _goal_kpi("Total Book LTV", f"${current_book_ltv:,.0f}", f"{current:,} members × ${ltv_per:,}", "green")]):
+        col.markdown(html, unsafe_allow_html=True)
     st.markdown("<br>", unsafe_allow_html=True)
-    _hdr(f"📈 Progress — {month_label}", "trend")
 
-    def _goal_card(col, label, now, goal, color):
-        pct = round(now / goal * 100) if goal else 0
-        sub = f"{pct}% of {goal:,}" if goal else "no target set"
-        with col:
-            st.markdown(ui.stat_card(label, f"{now:,}", "trend", color), unsafe_allow_html=True)
-            st.progress(min(now / goal, 1.0) if goal else 0.0, text=sub)
+    st.markdown(ui.section_header("Pace needed to hit goal", "target"), unsafe_allow_html=True)
+    for col, html in zip(st.columns(3), [
+        _goal_kpi("New members / day", f"+{needed_per_day}", f"{days_left:,} days remaining"),
+        _goal_kpi("New members / week", f"+{needed_per_week:.0f}", f"{weeks_left:.0f} weeks remaining"),
+        _goal_kpi("New members / month", f"+{needed_per_mo:.0f}", f"{months_left:.0f} months remaining")]):
+        col.markdown(html, unsafe_allow_html=True)
+    st.markdown("<br>", unsafe_allow_html=True)
 
-    cols = st.columns(2)
-    _goal_card(cols[0], "New Policies", pol_now, int(goals.get("policies", 0)), ui.BLUE)
-    _goal_card(cols[1], "New Members", mem_now, int(goals.get("members", 0)), ui.ELEC)
+    st.markdown(ui.section_header("At your current pace", "trend"), unsafe_allow_html=True)
+    cur_mo, cur_wk, cur_dy = recent_growth, recent_growth * 12 / 52, recent_growth * 12 / 365
+    c1, c2, c3 = st.columns(3)
+    c1.markdown(_goal_kpi("New members / day", f"+{cur_dy:.2f}",
+                f"vs +{needed_per_day} needed · {'ahead of pace ✓' if cur_dy >= needed_per_day else 'below pace'}",
+                "green" if cur_dy >= needed_per_day else "red"), unsafe_allow_html=True)
+    c2.markdown(_goal_kpi("New members / week", f"+{cur_wk:.0f}",
+                f"vs +{needed_per_week:.0f} needed · {'ahead of pace ✓' if cur_wk >= needed_per_week else 'below pace'}",
+                "green" if cur_wk >= needed_per_week else "red"), unsafe_allow_html=True)
+    c3.markdown(_goal_kpi("New members / month", f"+{cur_mo:.0f}",
+                f"vs +{needed_per_mo:.0f} needed · {'ahead of pace ✓' if cur_mo >= needed_per_mo else 'below pace'}",
+                "green" if cur_mo >= needed_per_mo else "red"), unsafe_allow_html=True)
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    p1, p2, p3 = st.columns(3)
+    p1.markdown(_goal_kpi("Avg net new members / mo (last 3)", f"+{recent_growth:.0f}", "based on recent history"), unsafe_allow_html=True)
+    p2.markdown(_goal_kpi("Projected members by goal date", f"{projected:,}",
+                "On track ✓" if on_track else "Behind pace", "green" if on_track else "red"), unsafe_allow_html=True)
+    if GOAL - projected > 0:
+        p3.markdown(_goal_kpi("Projected ARR by goal date", f"${projected_arr:,.0f}",
+                    f"${goal_arr - projected_arr:,.0f} short of goal ARR", "red"), unsafe_allow_html=True)
+    else:
+        p3.markdown(_goal_kpi("Projected ARR by goal date", f"${projected_arr:,.0f}", "Goal ARR exceeded ✓", "green"), unsafe_allow_html=True)
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # Growth vs required pace chart
+    st.markdown(ui.section_header("Growth vs. required pace", "bars"), unsafe_allow_html=True)
+    if mom is not None and not mom.empty and {"Month", "Total Members"}.issubset(mom.columns) and len(mom) >= 2:
+        hist = mom[["Month", "Total Members"]].dropna().rename(columns={"Month": "month", "Total Members": "active"})
+        hist["month"] = pd.to_datetime(hist["month"]); hist = hist.sort_values("month")
+        hist["arr"] = hist["active"] * PMPM * 12
+        start_date, start_count = hist["month"].iloc[0], hist["active"].iloc[0]
+        goal_ts = pd.Timestamp(GOAL_DATE)
+        pace_months = pd.date_range(start=start_date, end=goal_ts, freq="MS")
+        span = max((goal_ts - start_date).days, 1)
+        pace_vals = [start_count + (GOAL - start_count) * (t - start_date).days / span for t in pace_months]
+        pace_df = pd.DataFrame({"month": pace_months, "required": pace_vals,
+                                "required_arr": [v * PMPM * 12 for v in pace_vals]})
+        fm, fr = charts.goal_growth_figs(hist, pace_df, GOAL, goal_arr, TODAY)
+        tab_m, tab_r = st.tabs(["Members", "Annual Revenue"])
+        with tab_m:
+            ui.show_chart(fm)
+        with tab_r:
+            ui.show_chart(fr)
+    else:
+        st.info("Upload a couple months of exports and your growth chart fills in here.")
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # Weekly callout
+    week_pol = round(needed_per_week / max(avg_hh, 1))
+    st.markdown(
+        f'<div style="background:linear-gradient(90deg,rgba(245,158,11,0.13),rgba(245,158,11,0.04));'
+        f'border:1px solid rgba(245,158,11,0.4);border-left:4px solid {ui.GOLD};padding:16px 20px;'
+        f'border-radius:14px;margin-bottom:20px;">'
+        f'<div style="font-size:0.78rem;color:#8aacd6;text-transform:uppercase;letter-spacing:0.08em;font-weight:600;">This week\'s target</div>'
+        f'<div style="font-size:1.9rem;font-weight:800;color:{ui.GOLD};margin-top:4px;">+{needed_per_week:.0f} members</div>'
+        f'<div style="font-size:0.9rem;color:#8aacd6;margin-top:3px;">≈ {week_pol} policies &nbsp;·&nbsp; '
+        f'{weeks_left:.0f} weeks remaining to reach {GOAL:,} members by {GOAL_DATE.strftime("%b %d, %Y")}</div></div>',
+        unsafe_allow_html=True)
+
+    # Monthly targets table
+    st.markdown(ui.section_header("Monthly targets", "calendar"), unsafe_allow_html=True)
+    rows, ref, running = [], TODAY.replace(day=1), current
+    for i in range(int(months_left) + 2):
+        mo = ref + pd.DateOffset(months=i)
+        add = round(needed_per_mo)
+        running = min(running + add, GOAL)
+        rows.append({"Month": mo.strftime("%B %Y"), "Members to add": add,
+                     "Policies to add": round(add / max(avg_hh, 1)), "Running members": running,
+                     "MRR at target": f"${running * PMPM:,.0f}", "ARR at target": f"${running * PMPM * 12:,.0f}"})
+        if running >= GOAL:
+            break
+    with st.container(border=True):
+        st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True, height=340)
 
 
 _AEP_STATUSES = ["Not Started", "Contacted", "Renewed", "Lost"]
