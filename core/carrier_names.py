@@ -81,6 +81,61 @@ MASTER: list[str] = [
 ]
 
 
+# ── Carrier BRANDS ────────────────────────────────────────────────────────────
+# Agents pick a brand (one "Ambetter", one "Anthem", …) and the system maps each
+# client's specific legal-entity carrier to its brand. Order matters — the FIRST
+# brand whose keyword appears in the carrier name wins, so Anthem-branded Blue Cross
+# entities resolve to Anthem before the generic Blue Cross rule.
+_BRANDS = [
+    ("Ambetter", ["ambetter"]),
+    ("Oscar", ["oscar"]),
+    ("Anthem / Wellpoint", ["anthem", "wellpoint", "amgp", "compcare"]),
+    ("Blue Cross Blue Shield", ["blue cross", "bluecross", "blue shield", "blueshield",
+                                "bcbs", "florida blue", "regence", "blue care network",
+                                "hmo louisiana"]),
+    ("Cigna", ["cigna"]),
+    ("UnitedHealthcare", ["unitedhealthcare", "united health", "uhc"]),
+    ("Molina", ["molina"]),
+    ("Aetna / Coventry", ["aetna", "coventry"]),
+    ("CareSource", ["caresource"]),
+    ("SelectHealth", ["selecthealth", "select health"]),
+    ("Kaiser", ["kaiser"]),
+    ("CHRISTUS", ["christus"]),
+    ("Alliant", ["alliant"]),
+    ("Health First", ["health first"]),
+    ("Medical Mutual", ["medmutual", "medical mutual"]),
+    ("Network Health", ["network health"]),
+    ("Priority Health", ["priority health"]),
+    ("Scott & White", ["scott and white", "scott & white"]),
+    ("University of Michigan", ["university of michigan"]),
+    ("University of Utah", ["university of uta", "u of u"]),
+]
+
+
+def brand_of(carrier) -> str:
+    """Map a specific carrier name to its brand (or the name itself if unknown)."""
+    c = str(carrier or "").lower().strip()
+    if not c:
+        return ""
+    for brand, kws in _BRANDS:
+        if any(k in c for k in kws):
+            return brand
+    return str(carrier).strip()
+
+
+def brand_options(roster=None, extra=None) -> list[str]:
+    """Brand names to offer in the appointment picker: every brand present in the
+    master list, plus the brand of anything in the agent's own book or already
+    saved on a state (so a pick is never missing)."""
+    brands = {brand_of(n) for n in MASTER}
+    if roster is not None and "carrier" in getattr(roster, "columns", []):
+        brands |= {brand_of(c) for c in roster["carrier"].dropna()}
+    if extra:
+        brands |= {brand_of(c) for c in extra}
+    brands.discard("")
+    return sorted(brands, key=str.lower)
+
+
 def options(roster=None, extra=None) -> list[str]:
     """Master list, unioned with any carriers in the agent's own book (and any
     carriers already saved on a state) so a selection can never go missing."""

@@ -921,7 +921,7 @@ def page_settings(tenant: dict, roster) -> None:
         if edit and edit in appts:
             st.markdown("<div style='height:6px'></div>", unsafe_allow_html=True)
             st.markdown(f"**Carriers you're appointed with in {_STATE_NAMES.get(edit, edit)}**")
-            opts = carrier_names.options(roster, extra=appts.get(edit))
+            opts = carrier_names.brand_options(roster, extra=appts.get(edit))
             current = [c for c in (appts.get(edit) or []) if c in opts]
             picked = st.multiselect("Pick every carrier you can write in this state",
                                     opts, default=current, key=f"appt_carriers_{edit}",

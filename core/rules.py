@@ -84,23 +84,23 @@ def apply_agent_settings(roster: pd.DataFrame, settings: dict) -> pd.DataFrame:
     states = [s.strip().upper() for s in (settings.get("licensed_states") or []) if s.strip()]
 
     if appts and {"state", "carrier"}.issubset(df.columns):
-        # Appointments hold exact carrier names per state; match the client's
-        # carrier by exact (case-insensitive) name. A short legacy entry with no
-        # exact match falls back to substring so older keyword setups still work.
-        appt_u = {str(k).upper(): [str(x).lower().strip() for x in v] for k, v in appts.items()}
+        # Appointments hold carrier BRANDS per state ("Ambetter", "Anthem", …).
+        # A client counts if the brand of its specific carrier is one the agent is
+        # appointed with in that state. Exact-name entries still match (a name's
+        # brand is itself when unknown), so older setups keep working.
+        from core.carrier_names import brand_of
+        appt_b = {str(k).upper(): {brand_of(x) for x in v} | {str(x).strip() for x in v}
+                  for k, v in appts.items()}
 
         def _appointed(r) -> bool:
             st = str(r.get("state", "")).upper().strip()
-            c = str(r.get("carrier", "")).lower().strip()
+            c = str(r.get("carrier", "")).strip()
             if not st or not c:
                 return True
-            names = appt_u.get(st)
-            if not names:
+            appointed = appt_b.get(st)
+            if not appointed:
                 return False  # not appointed in that state at all
-            if c in names:
-                return True
-            # legacy keyword fallback (only for short, non-exact entries)
-            return any(k in c for k in names if len(k) <= 12 and k not in {c})
+            return brand_of(c) in appointed or c in appointed
 
         df = df[df.apply(_appointed, axis=1)]
     elif states and "state" in df.columns:
