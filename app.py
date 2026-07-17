@@ -1083,6 +1083,13 @@ _SETTINGS_CSS = """<style>
   .set-footer{background:rgba(34,197,94,.10);border:1px solid rgba(34,197,94,.30);border-radius:10px;
      padding:10px 14px;display:flex;justify-content:space-between;align-items:center;margin-top:10px;
      font-size:.85rem;color:#cbd5e1;}
+  /* Save Changes — blue→purple gradient like the sign-in button */
+  .st-key-savebar [data-testid="stButton"] button{
+     background:linear-gradient(90deg,#3b82f6 0%,#7c3aed 100%) !important;border:none !important;
+     color:#fff !important;font-weight:700 !important;border-radius:12px !important;padding:12px 20px !important;
+     box-shadow:0 6px 18px rgba(59,130,246,.28) !important;}
+  .st-key-savebar [data-testid="stButton"] button:hover{filter:brightness(1.08);}
+  .st-key-savebar [data-testid="stButton"] button p{color:#fff !important;}
 </style>"""
 
 
@@ -1208,7 +1215,9 @@ def page_settings(tenant: dict, roster) -> None:
     sb1.markdown('<div style="display:flex;align-items:center;gap:8px;color:#4ade80;font-weight:600;">'
                  '✓ All changes saved <span style="color:#7c8aa5;font-weight:400;">· '
                  'Carrier changes save instantly.</span></div>', unsafe_allow_html=True)
-    if sb2.button("💾  Save Changes", type="primary", use_container_width=True):
+    with sb2, st.container(key="savebar"):
+        _save_clicked = st.button("💾  Save Changes", type="primary", use_container_width=True)
+    if _save_clicked:
         errs = []
         new_npn = st.session_state.get("set_npn", "").strip()
         if new_npn != tenant.get("npn", ""):
