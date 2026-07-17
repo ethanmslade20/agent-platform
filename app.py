@@ -11,8 +11,8 @@ import os
 import pandas as pd
 import streamlit as st
 
-from core import (carrier_names, charts, daily, dashboard_kpis, ingest_service, paths,
-                  settings, tenants, ui, updates, views)
+from core import (aor_track, carrier_names, charts, daily, dashboard_kpis, ingest_service,
+                  paths, settings, tenants, ui, updates, views)
 
 # The product name your agents see. Placeholder — change it here anytime.
 APP_NAME = "Agent Book"
@@ -1439,9 +1439,18 @@ def page_aor(tenant: dict, roster) -> None:
             t = taken.copy()
             t["_mem"] = members.values
             t["Est $/yr"] = (t["_mem"] * 23 * 12).map(lambda v: f"${v:,.0f}")
+            # Days gone: counted from when we first detected the AOR change (the
+            # export gives no date). Sort freshest first — the newest steals are
+            # the most winnable (the client often doesn't know yet).
+            t["_nk"] = ["".join(ch for ch in f"{f}{l}".lower() if ch.isalnum())
+                        for f, l in zip(t.get("first_name", ""), t.get("last_name", ""))]
+            _days = aor_track.days_gone(tenant["agent_id"], list(t["_nk"]))
+            t["_days"] = t["_nk"].map(_days).fillna(0).astype(int)
+            t = t.sort_values("_days", ascending=True)
             show = pd.DataFrame({
                 "Client": (t["first_name"].fillna("") + " " + t["last_name"].fillna("")).str.strip().str.title(),
                 "Taken By": t.get("taken_by", ""),
+                "Days Gone": t["_days"].map(lambda d: "new" if d == 0 else f"{d}d"),
                 "Carrier": t.get("carrier", ""),
                 "State": t.get("state", ""),
                 "Members": t["_mem"].astype(int),
@@ -1450,6 +1459,8 @@ def page_aor(tenant: dict, roster) -> None:
             })
             st.dataframe(show, use_container_width=True, hide_index=True,
                          height=min(46 + 35 * max(len(show), 1), 560))
+            st.caption("**Days Gone** counts from when the agent first saw the AOR change — "
+                       "freshest at the top (most winnable). It builds over time as you upload.")
 
 
 def page_verifications(tenant: dict, roster) -> None:
