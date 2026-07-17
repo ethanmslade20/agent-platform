@@ -80,13 +80,17 @@ _LOGIN_CSS = f"""
 
   [data-testid="stTextInput"] label {{ color:#e6edf7 !important; font-weight:600; font-size:.95rem; }}
 
-  /* inputs */
-  [data-testid="stTextInput"] [data-baseweb="input"],
-  [data-testid="stTextInput"] [data-baseweb="base-input"] {{
+  /* inputs — border ONLY on the outer wrapper (the inner container stays
+     transparent so password fields don't render a doubled border) */
+  [data-testid="stTextInput"] [data-baseweb="input"] {{
     background: rgba(9,16,34,0.72) !important;
     border: 1px solid rgba(96,165,250,0.28) !important;
     border-radius: 12px !important;
     background-repeat:no-repeat !important; background-position:15px center !important; background-size:18px 18px !important;
+    overflow:hidden !important;
+  }}
+  [data-testid="stTextInput"] [data-baseweb="base-input"] {{
+    background:transparent !important; border:none !important;
   }}
   [data-testid="stTextInput"]:has(input[type="password"]) [data-baseweb="input"] {{ background-image:url("{_ICON_LOCK}") !important; }}
   [data-testid="stTextInput"]:has(input:not([type="password"])) [data-baseweb="input"] {{ background-image:url("{_ICON_USER}") !important; }}
@@ -95,7 +99,13 @@ _LOGIN_CSS = f"""
     padding: 13px 12px 13px 46px !important; font-size:1rem;
   }}
   [data-testid="stTextInput"] input::placeholder {{ color:#66768f !important; }}
-  [data-baseweb="input"]:focus-within {{ border-color:#3b82f6 !important; box-shadow:0 0 0 3px rgba(59,130,246,0.18) !important; }}
+  /* reveal-password eye — flat, no border/box, subtle until hover */
+  [data-testid="stTextInput"] [data-baseweb="input"] button {{
+    background:transparent !important; border:none !important; box-shadow:none !important;
+    color:#66768f !important; margin-right:6px !important;
+  }}
+  [data-testid="stTextInput"] [data-baseweb="input"] button:hover {{ color:#e6edf7 !important; }}
+  [data-testid="stTextInput"] [data-baseweb="input"]:focus-within {{ border-color:#3b82f6 !important; box-shadow:0 0 0 3px rgba(59,130,246,0.18) !important; }}
 
   .forgot {{ text-align:right; margin:2px 0 6px; }}
   .forgot span {{ color:#60a5fa; font-size:.85rem; cursor:pointer; }}
