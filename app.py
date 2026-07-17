@@ -1242,36 +1242,178 @@ def page_book(tenant: dict, roster) -> None:
 
 
 def page_losses(tenant: dict, roster) -> None:
-    st.title("Losses  ·  Re-Engage")
-    st.caption("Clients who cancelled or terminated — your win-back list.")
+    st.title("Re-Engage")
+    st.caption("Clients who cancelled or went missing — sorted by most recently lost. "
+               "Reach out while the relationship is fresh.")
+    st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
     if roster is None:
         _need_book(); return
-    lost = views.losses(roster)
-    _stat(ui.stat_card("Cancelled / terminated", f"{len(lost):,}", "minus", ui.RED))
-    _table(lost, ["first_name", "last_name", "carrier", "state", "status", "term_date"],
-           "No losses — everyone's still active. 🎉")
+
+    today_ts = pd.Timestamp(dt.date.today())
+    lost = views.losses(roster).copy()
+    if lost.empty:
+        st.success("No cancelled or terminated clients — everyone's still active. 🎉"); return
+
+    lost["term_date"] = pd.to_datetime(lost.get("term_date"), errors="coerce")
+    lost["days_since_lost"] = (today_ts - lost["term_date"]).dt.days.clip(lower=0)
+
+    def _urgency(days):
+        if pd.isna(days):
+            return "⚪ Unknown"
+        if days <= 30:
+            return "🔴 <30 days"
+        if days <= 60:
+            return "🟡 30–60 days"
+        if days <= 90:
+            return "🟠 60–90 days"
+        return "⚪ 90+ days"
+
+    def _rel_day(ts):
+        if pd.isna(ts):
+            return "Unknown"
+        d = (today_ts - ts).days
+        return "today" if d <= 0 else ("yesterday" if d == 1 else f"{d} days ago")
+
+    lost["Urgency"] = lost["days_since_lost"].apply(_urgency)
+    d30 = int((lost["days_since_lost"] <= 30).sum())
+    d60 = int((lost["days_since_lost"] <= 60).sum())
+    d90 = int((lost["days_since_lost"] <= 90).sum())
+    _cards([
+        ui.stat_card("Need Outreach", f"{len(lost):,}", "users", ui.ELEC),
+        ui.stat_card("Lost < 30 Days", f"{d30:,}", "clock", ui.RED),
+        ui.stat_card("Lost < 60 Days", f"{d60:,}", "clock", ui.GOLD),
+        ui.stat_card("Lost < 90 Days", f"{d90:,}", "clock", ui.CYAN),
+    ])
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    f1, f2, f3 = st.columns(3)
+    window = {"Last 30 days": 30, "Last 60 days": 60, "Last 90 days": 90, "All time": 99999}
+    wlabel = f1.selectbox("Show lost in", list(window), index=3)
+    carrier = f2.selectbox("Carrier", ["All"] + sorted(lost["carrier"].dropna().astype(str).unique().tolist()))
+    state = f3.selectbox("State", ["All"] + sorted(lost["state"].dropna().astype(str).unique().tolist()))
+    view = lost[lost["days_since_lost"].fillna(99999) <= window[wlabel]].copy()
+    if carrier != "All":
+        view = view[view["carrier"].astype(str) == carrier]
+    if state != "All":
+        view = view[view["state"].astype(str) == state]
+    view = view.sort_values("days_since_lost", ascending=True, na_position="last")
+
+    st.caption(f"Showing **{len(view)}** clients · {wlabel.lower()}")
+    if view.empty:
+        st.info("No clients match the current filters."); return
+    show = pd.DataFrame({
+        "Name": (view["first_name"].fillna("") + " " + view["last_name"].fillna("")).str.strip().str.title(),
+        "Urgency": view["Urgency"],
+        "Lost": view["term_date"].apply(_rel_day),
+        "Carrier": view["carrier"],
+        "State": view["state"],
+        "Members": pd.to_numeric(view.get("applicant_count"), errors="coerce").fillna(1).clip(lower=1).astype(int),
+        "Why Ended": (view["cancel_reason"].fillna("").replace("", "—")
+                      if "cancel_reason" in view.columns else "—"),
+        "Phone": view.get("phone", ""),
+    })
+    st.dataframe(show, use_container_width=True, hide_index=True, height=min(120 + len(show) * 34, 620))
 
 
 def page_aor(tenant: dict, roster) -> None:
     st.title("AOR Defense")
-    st.caption("Clients another agent is now the agent of record on — your recovery list.")
+    st.caption("Clients another agent filed an Agent-of-Record change on — call them, most don't "
+               "know they were switched. Newest steals first — the freshest are the most winnable.")
+    st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
     if roster is None:
         _need_book(); return
-    taken = views.aor_taken(roster, tenant.get("npn", ""), tenant.get("name", ""))
-    _stat(ui.stat_card("Taken by another agent", f"{len(taken):,}", "shield", ui.GOLD))
-    _table(taken, ["first_name", "last_name", "state", "taken_by", "carrier"],
-           "None taken — you hold every client's AOR. 🛡️")
+
+    taken = views.aor_taken(roster, tenant.get("npn", ""), tenant.get("name", "")).copy()
+    members = pd.to_numeric(taken.get("applicant_count"), errors="coerce").fillna(1).clip(lower=1)
+    stake = int(members.sum()) * 23 * 12
+
+    _cards([
+        ui.stat_card("Taken by Another Agent", f"{len(taken):,}", "minus", ui.RED),
+        ui.stat_card("Members at Risk", f"{int(members.sum()):,}", "users", ui.ELEC),
+        ui.stat_card("$/yr at Stake", f"${stake:,}", "dollar", ui.GREEN),
+    ])
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    with st.container(border=True):
+        st.markdown(ui.chart_head("Taken — call these first",
+                                  "Script: “I saw your plan got moved to a different agent — did you mean to do that?”",
+                                  "minus"), unsafe_allow_html=True)
+        if taken.empty:
+            st.success("None taken — you hold every client's AOR. 🛡️")
+        else:
+            t = taken.copy()
+            t["_mem"] = members.values
+            t["Est $/yr"] = (t["_mem"] * 23 * 12).map(lambda v: f"${v:,.0f}")
+            show = pd.DataFrame({
+                "Client": (t["first_name"].fillna("") + " " + t["last_name"].fillna("")).str.strip().str.title(),
+                "Taken By": t.get("taken_by", ""),
+                "Carrier": t.get("carrier", ""),
+                "State": t.get("state", ""),
+                "Members": t["_mem"].astype(int),
+                "Est $/yr": t["Est $/yr"],
+                "Phone": t.get("phone", ""),
+            })
+            st.dataframe(show, use_container_width=True, hide_index=True,
+                         height=min(46 + 35 * max(len(show), 1), 560))
 
 
 def page_verifications(tenant: dict, roster) -> None:
     st.title("Verifications")
-    st.caption("Active clients with an expired document check — coverage at risk unless docs go in.")
+    st.caption("HealthSherpa verifications your clients still owe. **DMI** = income/coverage match; "
+               "**SVI** = enrollment verification. If one **expires, the client loses their premium "
+               "subsidy** and usually drops. **Open** ones are still savable — reach out before they expire.")
+    st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
     if roster is None:
         _need_book(); return
-    v = views.verifications(roster)
-    _stat(ui.stat_card("Docs expired", f"{len(v):,}", "clock", ui.GOLD))
-    _table(v, ["first_name", "last_name", "carrier", "state", "status"],
-           "No expired verifications — you're clean. ✅")
+
+    def _num(col):
+        return (pd.to_numeric(roster[col], errors="coerce").fillna(0)
+                if col in roster.columns else pd.Series(0.0, index=roster.index))
+
+    open_mask = ((_num("dmi_outstanding") > 0) | (_num("svi_outstanding") > 0)) & roster["status"].isin(views.ACTIVE)
+    exp_mask = roster.get("cancel_reason", pd.Series("", index=roster.index)).astype(str) == "Verification expired"
+    fu = roster[open_mask | exp_mask].copy()
+    if fu.empty:
+        st.success("No outstanding verification follow-ups right now. 🎉"); return
+    fu["Status"] = fu.index.map(lambda i: "Open" if open_mask.get(i, False) else "Expired")
+
+    open_n = int((fu["Status"] == "Open").sum())
+    exp_n = int((fu["Status"] == "Expired").sum())
+    _cards([
+        ui.stat_card("Open — Save the Subsidy", f"{open_n:,}", "clock", ui.GOLD),
+        ui.stat_card("Expired — Lost", f"{exp_n:,}", "minus", ui.RED),
+        ui.stat_card("Total Follow-ups", f"{len(fu):,}", "shield", ui.ELEC),
+    ])
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    e1, e2, e3 = st.columns(3)
+    fs = e1.selectbox("Status", ["Open first", "Open only", "Expired only", "All"], key="fu_status")
+    fc = e2.selectbox("Carrier", ["All"] + sorted(fu["carrier"].dropna().astype(str).unique().tolist()), key="fu_carrier")
+    fst = e3.selectbox("State", ["All"] + sorted(fu["state"].dropna().astype(str).unique().tolist()), key="fu_state")
+    fv = fu.copy()
+    if fs == "Open only":
+        fv = fv[fv["Status"] == "Open"]
+    elif fs == "Expired only":
+        fv = fv[fv["Status"] == "Expired"]
+    if fc != "All":
+        fv = fv[fv["carrier"].astype(str) == fc]
+    if fst != "All":
+        fv = fv[fv["state"].astype(str) == fst]
+    fv = fv.sort_values("Status")  # Open before Expired
+
+    fd = pd.DataFrame({
+        "Name": (fv["first_name"].fillna("") + " " + fv["last_name"].fillna("")).str.strip().str.title(),
+        "Status": fv["Status"],
+        "DMI": pd.to_numeric(fv.get("dmi_outstanding"), errors="coerce").fillna(0).astype(int),
+        "SVI": pd.to_numeric(fv.get("svi_outstanding"), errors="coerce").fillna(0).astype(int),
+        "Carrier": fv["carrier"],
+        "State": fv["state"],
+        "Phone": fv.get("phone", ""),
+    })
+    st.caption(f"Showing **{len(fd)}** follow-ups · open first")
+    st.dataframe(fd, use_container_width=True, hide_index=True, height=min(120 + len(fd) * 34, 620))
+    st.caption("**Open** items are still savable — reach out before they expire. **Expired** items have "
+               "lost the subsidy and move to Cancelled → Re-Engage.")
 
 
 def page_pastdue(tenant: dict, roster) -> None:
