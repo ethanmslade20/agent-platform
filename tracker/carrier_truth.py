@@ -114,7 +114,7 @@ def apply_ambetter_truth(all_clients: pd.DataFrame,
     is_amb = ac["carrier"].astype(str).str.contains("ambetter", case=False, na=False)
     is_active = ac["status"].isin(_ACTIVE)
 
-    dropped = _load_dropped((_ROOT / "data" / "ambetter_dropped.json"))
+    dropped = _load_dropped((Path(carrier_books_dir) / "ambetter_dropped.json"))
     today_iso = today.strftime("%Y-%m-%d")
 
     n_cancel_termed = n_cancel_dropped = n_protected = 0
@@ -141,7 +141,7 @@ def apply_ambetter_truth(all_clients: pd.DataFrame,
             ac.at[idx, "term_estimated"] = True
             n_cancel_dropped += 1
 
-    _save_dropped(dropped, (_ROOT / "data" / "ambetter_dropped.json"))
+    _save_dropped(dropped, (Path(carrier_books_dir) / "ambetter_dropped.json"))
 
     # Add portal-active clients the tracker doesn't have
     t_sid = set(ac.loc[is_amb, "_sid"]) - {""}
@@ -238,7 +238,7 @@ def apply_oscar_truth(all_clients: pd.DataFrame,
     def _match(nm, em, ph, S):
         return bool(nm in S or (em in S if em else False) or (ph in S if ph else False))
 
-    dropped = _load_dropped((_ROOT / "data" / "oscar_dropped.json"))
+    dropped = _load_dropped((Path(carrier_books_dir) / "oscar_dropped.json"))
     today_iso = today.strftime("%Y-%m-%d")
     n_cancel_inactive = n_cancel_dropped = n_protected = 0
 
@@ -264,7 +264,7 @@ def apply_oscar_truth(all_clients: pd.DataFrame,
             ac.at[idx, "term_estimated"] = True
             n_cancel_dropped += 1
 
-    _save_dropped(dropped, (_ROOT / "data" / "oscar_dropped.json"))
+    _save_dropped(dropped, (Path(carrier_books_dir) / "oscar_dropped.json"))
 
     # Add Oscar-active clients the tracker lacks
     t_keys = set(ac.loc[is_osc, "_nm"]) | (set(ac.loc[is_osc, "_em"]) - {""}) | (set(ac.loc[is_osc, "_ph"]) - {""})
@@ -323,7 +323,8 @@ def apply_uhc_truth(all_clients: pd.DataFrame,
     u = pd.read_excel(book, header=2).dropna(subset=["memberFirstName", "memberLastName"])
     u["nm"] = u.apply(lambda r: _name_key(r["memberFirstName"], r["memberLastName"]), axis=1)
     u["ph"] = u["memberPhone"].apply(_phone)
-    u["aid"] = u["IFP - FFM APP ID"].apply(_clean_id)
+    u["aid"] = (u["IFP - FFM APP ID"].apply(_clean_id)
+                if "IFP - FFM APP ID" in u.columns else "")
     ua, ui = u[u["planStatus"] == "A"], u[u["planStatus"] == "I"]
 
     A = set(ua["nm"]) | (set(ua["ph"]) - {""})
@@ -341,7 +342,7 @@ def apply_uhc_truth(all_clients: pd.DataFrame,
     def _m(nm, ph, S):
         return bool(nm in S or (ph in S if ph else False))
 
-    dropped = _load_dropped((_ROOT / "data" / "uhc_dropped.json"))
+    dropped = _load_dropped((Path(carrier_books_dir) / "uhc_dropped.json"))
     today_iso = today.strftime("%Y-%m-%d")
     n_lapsed = n_dropped = n_protected = 0
 
@@ -369,7 +370,7 @@ def apply_uhc_truth(all_clients: pd.DataFrame,
             ac.at[idx, "term_estimated"] = True
             n_dropped += 1
 
-    _save_dropped(dropped, (_ROOT / "data" / "uhc_dropped.json"))
+    _save_dropped(dropped, (Path(carrier_books_dir) / "uhc_dropped.json"))
 
     # Add UHC-active business missing from tracker, grouped into policies by App ID
     t_keys = set(ac.loc[is_uhc, "_nm"]) | (set(ac.loc[is_uhc, "_ph"]) - {""})
@@ -449,7 +450,7 @@ def apply_anthem_truth(all_clients: pd.DataFrame,
     is_anth = ac["carrier"].astype(str).str.contains("anthem|wellpoint", case=False, na=False, regex=True)
     is_active = ac["status"].isin(_ACTIVE)
 
-    dropped = _load_dropped((_ROOT / "data" / "anthem_dropped.json"))
+    dropped = _load_dropped((Path(carrier_books_dir) / "anthem_dropped.json"))
     today_iso = today.strftime("%Y-%m-%d")
     n_lapsed = n_dropped = n_protected = 0
 
@@ -475,7 +476,7 @@ def apply_anthem_truth(all_clients: pd.DataFrame,
             ac.at[idx, "term_estimated"] = True
             n_dropped += 1
 
-    _save_dropped(dropped, (_ROOT / "data" / "anthem_dropped.json"))
+    _save_dropped(dropped, (Path(carrier_books_dir) / "anthem_dropped.json"))
 
     t_keys = set(ac.loc[is_anth, "_k"])
     miss = a_act[~a_act["key"].isin(t_keys)]

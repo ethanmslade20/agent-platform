@@ -118,4 +118,26 @@ def build_book(agent_id: str, npn: str = "", name: str = ""):
         roster.loc[gone, "status"] = "Cancelled"
         if "cancel_reason" in roster.columns:
             roster.loc[gone & (roster["cancel_reason"] == ""), "cancel_reason"] = "Left book"
-    return rules.apply_agent_settings(roster, settings.get(agent_id))
+    roster = rules.apply_agent_settings(roster, settings.get(agent_id))
+    # Carrier-portal truth: reconcile the active book against the carrier exports
+    # (Ambetter/Oscar/UHC/Anthem) the agent uploaded — the carrier's own system is
+    # the source of truth for who's really in force. No-op for any carrier not
+    # uploaded. This is what brings the numbers in line with Ethan's site.
+    roster = _apply_carrier_truth(agent_id, roster)
+    return roster
+
+
+def _apply_carrier_truth(agent_id: str, roster):
+    """Apply each uploaded carrier book as truth over the roster. Each function is
+    a no-op if that carrier's book isn't present; a malformed book is skipped
+    loudly rather than killing the whole build."""
+    from tracker.carrier_truth import (apply_ambetter_truth, apply_oscar_truth,
+                                        apply_uhc_truth, apply_anthem_truth)
+    cb = str(paths.carrier_books_dir(agent_id))
+    for fn, label in ((apply_ambetter_truth, "Ambetter"), (apply_oscar_truth, "Oscar"),
+                      (apply_uhc_truth, "UHC"), (apply_anthem_truth, "Anthem")):
+        try:
+            roster, _ = fn(roster, carrier_books_dir=cb)
+        except Exception as e:  # bad/changed export must not break the book
+            print(f"  !! {label} carrier truth skipped — {type(e).__name__}: {e}")
+    return roster
