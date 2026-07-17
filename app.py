@@ -323,33 +323,42 @@ def page_dashboard(tenant: dict, roster) -> None:
             return "—"
         return f"{'+' if plus and v >= 0 else ''}{v:,.1f}"
 
-    _hdr("Book snapshot", "shield")
+    # First month of the agent's data drives the "since" sublabels (dynamic per agent).
+    first_label, first_abbr = "your first month", "start"
+    if mom is not None and not getattr(mom, "empty", True) and "Month" in mom.columns:
+        _fm = pd.to_datetime(mom["Month"], errors="coerce").min()
+        if pd.notna(_fm):
+            first_label, first_abbr = _fm.strftime("%b %Y"), _fm.strftime("%b")
+    since_sub = f"{first_label} – present"
+    net_sub = f"Added ({first_abbr}+) minus Lost (all-time)"
+
+    _hdr("Book Snapshot", "book")
     _cards([
-        ui.metric_card("Total active policies", f"{d['policies']:,}", icon_key="shield", spark=spark("Total Members", ui.ELEC)),
-        ui.metric_card("Total members", f"{d['members']:,}", icon_key="users", spark=spark("Total Members", ui.CYAN)),
-        ui.metric_card("Avg household size", f"{d['household']:.1f}", icon_key="home"),
+        ui.metric_card("Total Active Policies", f"{d['policies']:,}", icon_key="shield", spark=spark("Total Policies", ui.ELEC)),
+        ui.metric_card("Total Members", f"{d['members']:,}", icon_key="users", spark=spark("Total Members", ui.CYAN)),
+        ui.metric_card("Avg Household Size", f"{d['household']:.1f}", icon_key="home"),
     ])
 
-    _hdr("Growth · policies / month", "trend")
-    churn = f"{d['churn']:.2f}% monthly churn" if d["churn"] is not None else "All history"
+    _hdr("Growth Metrics", "trend")
+    churn = (f"All history • {d['churn']:.2f}% monthly churn" if d["churn"] is not None else "All history")
     _cards([
-        ui.metric_card("Avg added / month", fnum(d["added"]), icon_key="plus", spark=spark("New Policies", ui.GREEN)),
-        ui.metric_card("Avg lost / month", fnum(d["lost"]), sub=churn, icon_key="minus", spark=spark("Policies Lost", ui.RED)),
-        ui.metric_card("Avg net growth / month", fnum(d["net_growth"], plus=True), icon_key="trend", spark=spark("New Policies", ui.ELEC)),
+        ui.metric_card("Avg Policies Added / Month", fnum(d["added"]), sub=since_sub, icon_key="plus", spark=spark("New Policies", ui.GREEN)),
+        ui.metric_card("Avg Policies Lost / Month", fnum(d["lost"]), sub=churn, icon_key="minus", spark=spark("Policies Lost", ui.RED)),
+        ui.metric_card("Avg Net Growth / Month", fnum(d["net_growth"], plus=True), sub=net_sub, icon_key="trend", spark=spark("Net Change", ui.ELEC)),
     ])
 
-    _hdr("Growth · members / month", "trend")
+    _hdr("Member Growth", "trend")
     _cards([
-        ui.metric_card("Avg members added / month", fnum(d["m_added"]), icon_key="plus", spark=spark("New Members", ui.GREEN)),
-        ui.metric_card("Avg members lost / month", fnum(d["m_lost"]), icon_key="minus", spark=spark("Members Lost", ui.RED)),
-        ui.metric_card("Net members / month", fnum(d["net_members"], plus=True), icon_key="trend", spark=spark("New Members", ui.ELEC)),
+        ui.metric_card("Avg Members Added / Month", fnum(d["m_added"]), sub=since_sub, icon_key="plus", spark=spark("New Members", ui.GREEN)),
+        ui.metric_card("Avg Members Lost / Month", fnum(d["m_lost"]), sub="All history", icon_key="minus", spark=spark("Members Lost", ui.RED)),
+        ui.metric_card("Net Members Gained / Month", fnum(d["net_members"], plus=True), sub=net_sub, icon_key="trend", spark=spark("New Members", ui.ELEC)),
     ])
 
-    _hdr("Commission forecast", "dollar")
+    _hdr("Commission Forecast", "dollar")
     _cards([
-        ui.metric_card("Expected monthly", f"${d['comm_monthly']:,.0f}", icon_key="dollar", spark=spark("Total Members", "#c4b5fd"), highlight="green"),
-        ui.metric_card("Expected annual", f"${d['comm_annual']:,.0f}", icon_key="calendar"),
-        ui.metric_card("Per policy / mo", f"${d['per_policy']:.2f}", icon_key="file"),
+        ui.metric_card("Expected Monthly Commission", f"${d['comm_monthly']:,.0f}", icon_key="dollar", spark=spark("Total Members", "#c4b5fd"), highlight="green"),
+        ui.metric_card("Expected Annual Commission", f"${d['comm_annual']:,.0f}", icon_key="calendar"),
+        ui.metric_card("Commission Per Policy / Mo", f"${d['per_policy']:.2f}", icon_key="file"),
     ])
 
     if d["history_months"] < 2:
