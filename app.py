@@ -541,22 +541,130 @@ def page_trends(tenant: dict, roster) -> None:
         st.dataframe(mom, use_container_width=True, hide_index=True)
 
 
+_LOOKUP_CSS = """<style>
+  .st-key-lookup_hero {max-width:620px;}
+  .st-key-lookup_hero div[data-baseweb="select"] > div {
+      font-size:1.08rem; padding:8px 12px; border-radius:14px;
+      background:rgba(15,23,42,.65); border:1.5px solid rgba(96,165,250,.4);
+      box-shadow:0 6px 22px rgba(0,0,0,.3);}
+  .st-key-lookup_hero div[data-baseweb="select"] > div > div:first-child,
+  .st-key-lookup_hero div[data-baseweb="select"] > div > div:first-child > div {
+      color:#f8fafc !important; font-weight:700 !important; opacity:1 !important;}
+  .st-key-lookup_hero div[data-baseweb="select"] input {
+      color:#f8fafc !important; font-weight:600 !important; -webkit-text-fill-color:#f8fafc !important;}
+</style>"""
+
+
 def page_client_lookup(tenant: dict, roster) -> None:
+    import re as _re
     st.title("Client Lookup")
     if roster is None:
         _need_book(); return
-    q = st.text_input("Search by name", placeholder="Start typing a client's name…")
-    if not q.strip():
-        st.caption("Type a name to pull up a client's details.")
+    st.caption("Start typing — the list narrows with every letter. Pick a client to open their profile.")
+
+    people_all = (roster["first_name"].fillna("").astype(str).str.title().str.strip() + " "
+                  + roster["last_name"].fillna("").astype(str).str.title().str.strip()).str.strip()
+    names = sorted({p for p in people_all if p})
+    with st.container(key="lookup_hero"):
+        person = st.selectbox("Find a client", names, index=None, key="lookup_select",
+                              placeholder="🔎  Type a name…  (e.g. “br” → every Brandon, Brittney, Bryan…)",
+                              label_visibility="collapsed")
+    st.markdown(_LOOKUP_CSS, unsafe_allow_html=True)
+
+    if not person:
+        st.info("🔎 Pick a client to see everything — policies, contact, and alerts.")
         return
-    ql = q.lower().strip()
-    mask = (roster["first_name"].fillna("").astype(str).str.lower().str.contains(ql)
-            | roster["last_name"].fillna("").astype(str).str.lower().str.contains(ql))
-    hits = roster[mask]
-    st.caption(f"{len(hits)} match(es)")
-    cols = [c for c in ["first_name", "last_name", "carrier", "state", "status",
-                        "effective_date", "policy_aor", "phone", "email"] if c in hits.columns]
-    st.dataframe(hits[cols].rename(columns=_NAMES), use_container_width=True, hide_index=True)
+
+    rows = roster[people_all == person].copy()
+    if not len(rows):
+        return
+    rows["_eff"] = pd.to_datetime(rows["effective_date"], errors="coerce")
+    rows = rows.sort_values("_eff", ascending=False)
+    r = rows.iloc[0]  # newest policy is the headline
+
+    is_active = r.get("status") in views.ACTIVE
+    _mem_n = pd.to_numeric(r.get("applicant_count"), errors="coerce")
+    _mem = 1 if pd.isna(_mem_n) else max(int(_mem_n), 1)
+
+    # ── Header ────────────────────────────────────────────────────────────────
+    pill_bg, pill_tx = (("rgba(34,197,94,.15)", "#4ade80") if is_active
+                        else ("rgba(239,68,68,.15)", "#f87171"))
+    pid = str(r.get("policy_number") or "").strip()
+    pid_txt = (f" · Policy ID: <span style='color:#e2e8f0;font-weight:600;'>{pid}</span>"
+               if pid and pid.lower() not in ("nan", "none") else "")
+    st.markdown(
+        f"<div style='display:flex;align-items:center;gap:14px;margin:6px 0 2px;'>"
+        f"<span style='font-size:1.6rem;font-weight:800;color:#f8fafc;'>{person}</span>"
+        f"<span style='background:{pill_bg};color:{pill_tx};padding:3px 12px;border-radius:999px;"
+        f"font-size:.8rem;font-weight:700;'>{r.get('status', '?')}</span></div>"
+        f"<div style='color:#94a3b8;font-size:.95rem;margin-bottom:10px;'>"
+        f"{r.get('carrier', '—')} · {r.get('state', '—')}{pid_txt}</div>",
+        unsafe_allow_html=True)
+
+    # ── Agent-of-record banner ──────────────────────────────────────────────────
+    aor = str(r.get("policy_aor") or "")
+    npn = str(tenant.get("npn") or "")
+    parts = [p for p in str(tenant.get("name") or "").lower().split() if p]
+    mine = (npn and npn in aor) or (parts and all(p in aor.lower() for p in parts))
+    if aor.strip().lower() in ("", "none", "nan"):
+        st.caption("Agent of record: not recorded (usually fine — carrier book shows you).")
+    elif mine:
+        st.success("You are the agent of record.", icon="🛡️")
+    else:
+        who = _re.sub(r"\s*\(NPN.*\)", "", aor).strip().title()
+        st.error(f"Agent of record is **{who}** — this client is on your AOR Defense page.", icon="🚨")
+
+    # ── Stat cards ──────────────────────────────────────────────────────────────
+    prem = pd.to_numeric(r.get("net_premium"), errors="coerce")
+    mob = pd.to_numeric(r.get("months_on_book"), errors="coerce")
+    _cards([
+        ui.stat_card("Members", f"{_mem}", "users", ui.CYAN),
+        ui.stat_card("Net Premium / Mo", f"${prem:,.0f}" if pd.notna(prem) else "—", "dollar", ui.GREEN),
+        ui.stat_card("Months on Book",
+                     ("<1" if int(mob) == 0 else f"{int(mob)}") if pd.notna(mob) else "—", "calendar", ui.ELEC),
+        ui.stat_card("Est Commission / Yr", f"${_mem * 23 * 12:,.0f}" if is_active else "$0", "trend", ui.GOLD),
+    ])
+
+    # ── Contact ─────────────────────────────────────────────────────────────────
+    ph = _re.sub(r"\D", "", str(r.get("phone") or ""))
+    ph_fmt = f"({ph[:3]}) {ph[3:6]}-{ph[6:10]}" if len(ph) >= 10 else (ph or "—")
+    em = str(r.get("email") or "").strip() or "—"
+    cs = rows["_eff"].min()  # earliest policy = client since
+    cs_fmt = cs.strftime("%b %-d, %Y") if pd.notna(cs) else "—"
+    c1, c2, c3 = st.columns(3)
+    c1.markdown(f"**📞 Phone:** {ph_fmt}")
+    c2.markdown(f"**✉️ Email:** {em}")
+    c3.markdown(f"**🗓️ Client since:** {cs_fmt}")
+
+    # ── Why they left (churned) ─────────────────────────────────────────────────
+    reason = str(r.get("cancel_reason") or "").strip()
+    if not is_active and reason:
+        st.warning(f"**Why they left:** {reason}", icon="📋")
+
+    # ── Verification flags ──────────────────────────────────────────────────────
+    dmi_n = pd.to_numeric(r.get("dmi_outstanding"), errors="coerce")
+    svi_n = pd.to_numeric(r.get("svi_outstanding"), errors="coerce")
+    dmi = 0 if pd.isna(dmi_n) else int(dmi_n)
+    svi = 0 if pd.isna(svi_n) else int(svi_n)
+    if dmi or svi:
+        st.warning(f"📎 Outstanding verification docs: {dmi} DMI, {svi} SVI — their subsidy is at "
+                   "risk until submitted (see Verifications).", icon="⚠️")
+
+    # ── Policies (history) ──────────────────────────────────────────────────────
+    with st.container(border=True):
+        st.markdown(ui.chart_head("Policies", f"{len(rows)} on record for {person}", "file"),
+                    unsafe_allow_html=True)
+        pc = [c for c in ["carrier", "policy_number", "status", "effective_date", "term_date",
+                          "net_premium", "applicant_count", "cancel_reason"] if c in rows.columns]
+        pt = rows[pc].rename(columns={
+            "carrier": "Carrier", "policy_number": "Policy ID", "status": "Status",
+            "effective_date": "Effective", "term_date": "Term Date", "net_premium": "Premium",
+            "applicant_count": "Members", "cancel_reason": "Why Ended"})
+        st.dataframe(pt, use_container_width=True, hide_index=True,
+                     column_config={
+                         "Effective": st.column_config.DateColumn("Effective", format="MMM D, YYYY"),
+                         "Term Date": st.column_config.DateColumn("Term Date", format="MMM D, YYYY"),
+                     })
 
 
 def page_commissions(tenant: dict, roster) -> None:
