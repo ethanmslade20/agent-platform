@@ -1055,95 +1055,176 @@ _STATE_NAMES = {
 }
 
 
+_SETTINGS_CSS = """<style>
+  .set-h{display:flex;align-items:center;gap:14px;margin:2px 0 6px;}
+  .set-badge{width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;
+     background:rgba(96,165,250,.14);border:1px solid rgba(96,165,250,.30);flex:none;}
+  .set-badge svg{width:20px;height:20px;stroke:#93c5fd;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
+  .set-h .t{font-size:1.15rem;font-weight:800;color:#f1f5f9;line-height:1.15;}
+  .set-h .s{font-size:.85rem;color:#8aacd6;}
+  .set-sub{font-size:.8rem;color:#7c8aa5;margin-top:-6px;}
+  .set-chip{background:rgba(15,23,42,.6);border:1px solid rgba(96,165,250,.25);border-radius:14px;
+     padding:8px 16px;display:flex;align-items:center;gap:12px;}
+  .set-chip svg{width:22px;height:22px;stroke:#93c5fd;fill:none;stroke-width:2;}
+  .set-chip .n{font-size:1.45rem;font-weight:800;color:#fff;line-height:1;}
+  .set-chip .l{font-size:.7rem;color:#8aacd6;text-transform:uppercase;letter-spacing:.05em;}
+  /* state list buttons → cards with a chevron */
+  .st-key-statelist [data-testid="stButton"] button{width:100%;justify-content:flex-start;text-align:left;
+     border-radius:12px;padding:12px 34px 12px 14px;border:1px solid rgba(96,165,250,.18);
+     background:rgba(15,23,42,.5);font-weight:600;position:relative;white-space:pre-line;line-height:1.35;}
+  .st-key-statelist [data-testid="stButton"] button::after{content:"›";position:absolute;right:14px;top:50%;
+     transform:translateY(-50%);color:#64748b;font-size:1.25rem;}
+  /* carrier checkbox grid → selectable cards */
+  .st-key-carriergrid [data-testid="stCheckbox"]{border:1px solid rgba(96,165,250,.18);border-radius:10px;
+     padding:11px 13px;background:rgba(15,23,42,.5);transition:border-color .12s,background .12s;}
+  .st-key-carriergrid [data-testid="stCheckbox"]:hover{border-color:rgba(96,165,250,.45);}
+  .st-key-carriergrid [data-testid="stCheckbox"]:has(input:checked){border-color:#3b82f6;background:rgba(59,130,246,.14);}
+  .st-key-carriergrid [data-testid="stCheckbox"] label{width:100%;}
+  .set-footer{background:rgba(34,197,94,.10);border:1px solid rgba(34,197,94,.30);border-radius:10px;
+     padding:10px 14px;display:flex;justify-content:space-between;align-items:center;margin-top:10px;
+     font-size:.85rem;color:#cbd5e1;}
+</style>"""
+
+
+def _sec_head(icon: str, title: str, sub: str) -> str:
+    return (f'<div class="set-h"><span class="set-badge">{ui.ICONS.get(icon, "")}</span>'
+            f'<span><div class="t">{title}</div><div class="s">{sub}</div></span></div>')
+
+
+def _chip(icon: str, n, label: str) -> str:
+    return (f'<div class="set-chip"><span>{ui.ICONS.get(icon, "")}</span>'
+            f'<span><div class="n">{n}</div><div class="l">{label}</div></span></div>')
+
+
 def page_settings(tenant: dict, roster) -> None:
     st.title("Settings")
+    st.caption("Manage your profile, licensed states, and carrier appointments.")
+    st.markdown(_SETTINGS_CSS, unsafe_allow_html=True)
     agent_id = tenant["agent_id"]
     cfg = settings.get(agent_id)
+    appts = cfg.get("appointments", {}) or {}
 
-    # ── Profile / NPN ─────────────────────────────────────────────────────────
+    # ── Profile Information ─────────────────────────────────────────────────────
     with st.container(border=True):
-        st.markdown(ui.chart_head("Your profile", "Your NPN keeps your book scoped to you", "shield"),
+        st.markdown(_sec_head("shield", "Profile Information",
+                              "This information is used to manage your book of business."),
                     unsafe_allow_html=True)
-        st.write(f"**Agent:** {tenant.get('name') or tenant.get('username')}")
-        with st.form("username_form"):
-            new_un = st.text_input("Username", value=tenant.get("username", ""),
-                                   help="What you sign in with. Changing it keeps all your data.")
-            if st.form_submit_button("Save username", type="primary"):
-                try:
-                    updated = tenants.rename(tenant["username"], new_un)
-                    st.session_state.tenant.update(updated)
-                    st.success(f"Username updated to '{updated['username']}'.")
-                    st.rerun()
-                except ValueError as e:
-                    st.error(str(e))
-        with st.form("npn_form"):
-            npn = st.text_input("Your NPN (National Producer Number)", value=tenant.get("npn", ""),
-                                help="Keeps only YOUR clients when you upload. Set it before your first upload.")
-            if st.form_submit_button("Save NPN", type="primary"):
-                tenants.update_npn(tenant["username"], npn)
-                st.session_state.tenant["npn"] = npn.strip()
-                st.success("Saved. Re-upload your export so it re-scopes to your clients.")
+        p1, p2 = st.columns(2)
+        with p1:
+            st.text_input("Username", value=tenant.get("username", ""), key="set_username")
+            st.markdown('<div class="set-sub">Used for your account and private workspace URL.</div>',
+                        unsafe_allow_html=True)
+        with p2:
+            st.text_input("National Producer Number (NPN)", value=tenant.get("npn", ""), key="set_npn")
+            st.markdown('<div class="set-sub">Your NPN keeps your book scoped to you.</div>',
+                        unsafe_allow_html=True)
 
-    # ── States & carrier appointments ─────────────────────────────────────────
+    # ── Licensed States & Carrier Appointments ──────────────────────────────────
     with st.container(border=True):
-        st.markdown(ui.chart_head("States & carrier appointments",
-                                  "Only clients in these states, on carriers you're appointed with, "
-                                  "count in your book", "pin"), unsafe_allow_html=True)
-        appts = cfg.get("appointments", {}) or {}
+        h1, h2 = st.columns([3, 2])
+        with h1:
+            st.markdown(_sec_head("pin", "Licensed States & Carrier Appointments",
+                                  "Select the states you are licensed in and manage your carrier appointments."),
+                        unsafe_allow_html=True)
+        with h2:
+            cc1, cc2 = st.columns(2)
+            cc1.markdown(_chip("pin", len(appts), "Active States"), unsafe_allow_html=True)
+            cc2.markdown(_chip("shield", sum(len(v) for v in appts.values()), "Carrier Appointments"),
+                         unsafe_allow_html=True)
+
         edit = st.session_state.get("appt_edit")
+        if edit not in appts:
+            edit = (sorted(appts, key=lambda s: _STATE_NAMES.get(s, s))[0] if appts else None)
 
-        # ── Your active states (click one to edit its carriers) ──
-        st.markdown("**Your states**")
-        if appts:
-            active_states = sorted(appts, key=lambda s: _STATE_NAMES.get(s, s))
-            per_row = 4
-            for i in range(0, len(active_states), per_row):
-                cols = st.columns(per_row)
-                for col, s in zip(cols, active_states[i:i + per_row]):
-                    n = len(appts.get(s) or [])
-                    label = f"📍 {_STATE_NAMES.get(s, s)} · {n} carrier{'s' if n != 1 else ''}"
-                    if col.button(label, key=f"pick_{s}", use_container_width=True,
-                                  type=("primary" if s == edit else "secondary")):
-                        st.session_state["appt_edit"] = s
-                        st.rerun()
+        left, right = st.columns([2, 3], gap="large")
+
+        # ---- Left: licensed states list ----
+        with left, st.container(key="statelist"):
+            st.markdown("**Your Licensed States**")
+            st.markdown('<div class="set-sub" style="margin:0 0 8px">Click a state to manage its carriers</div>',
+                        unsafe_allow_html=True)
+            remaining = [s for s in _US_STATES if s not in appts]
+            with st.popover("➕  Add State", use_container_width=True):
+                add_s = st.selectbox("State", remaining, format_func=lambda s: _STATE_NAMES.get(s, s),
+                                     key="appt_add") if remaining else None
+                if add_s and st.button("Add", type="primary", use_container_width=True, key="appt_add_btn"):
+                    settings.save(agent_id, {**cfg, "appointments": {**appts, add_s: []}})
+                    st.session_state["appt_edit"] = add_s
+                    st.rerun()
+            if not appts:
+                st.caption("No states yet — add the states you write business in.")
+            for s in sorted(appts, key=lambda x: _STATE_NAMES.get(x, x)):
+                n = len(appts.get(s) or [])
+                label = f"{_STATE_NAMES.get(s, s)}\n{n} carrier{'s' if n != 1 else ''}"
+                if st.button(label, key=f"pick_{s}", use_container_width=True,
+                             type=("primary" if s == edit else "secondary")):
+                    st.session_state["appt_edit"] = s
+                    st.rerun()
+
+        # ---- Right: carrier picker for the selected state ----
+        with right:
+            if not edit:
+                st.info("Add a state on the left, then pick the carriers you're appointed with there.")
+            else:
+                name = _STATE_NAMES.get(edit, edit)
+                hr1, hr2 = st.columns([3, 1])
+                hr1.markdown(f"**📍 {name}**  \n<span class='set-sub'>Select all the carriers you are "
+                             f"appointed with in this state.</span>", unsafe_allow_html=True)
+                if hr2.button("🗑  Remove State", key="rm_state", use_container_width=True):
+                    settings.save(agent_id, {**cfg, "appointments": {k: v for k, v in appts.items() if k != edit}})
+                    st.session_state.pop("appt_edit", None)
+                    st.rerun()
+
+                q = st.text_input("Search carriers", placeholder="🔎  Search carriers…",
+                                  key=f"csearch_{edit}", label_visibility="collapsed").lower().strip()
+                opts = carrier_names.brand_options(roster, extra=appts.get(edit))
+                shown = [c for c in opts if q in c.lower()] if q else opts
+                selected = set(appts.get(edit, []))
+
+                def _toggle(state, brand, key):
+                    cfg2 = settings.get(agent_id)
+                    cur = set(cfg2.get("appointments", {}).get(state, []))
+                    cur.add(brand) if st.session_state.get(key) else cur.discard(brand)
+                    settings.save(agent_id, {**cfg2, "appointments": {
+                        **cfg2.get("appointments", {}), state: sorted(cur)}})
+
+                with st.container(key="carriergrid"):
+                    grid = st.columns(3)
+                    for i, brand in enumerate(shown):
+                        key = f"cb_{edit}_{brand}"
+                        st.session_state[key] = brand in selected  # sync from saved before widget
+                        grid[i % 3].checkbox(brand, key=key, on_change=_toggle, args=(edit, brand, key))
+                    if not shown:
+                        st.caption("No carriers match your search.")
+
+                names = ", ".join(sorted(selected)) if selected else "none yet"
+                st.markdown(
+                    f'<div class="set-footer"><span>✓ <b>{len(selected)}</b> carrier'
+                    f'{"" if len(selected) == 1 else "s"} selected</span>'
+                    f'<span style="color:#94a3b8">{names}</span></div>', unsafe_allow_html=True)
+
+    # ── Save bar (profile) ──────────────────────────────────────────────────────
+    sb1, sb2 = st.columns([3, 1])
+    sb1.markdown('<div style="display:flex;align-items:center;gap:8px;color:#4ade80;font-weight:600;">'
+                 '✓ All changes saved <span style="color:#7c8aa5;font-weight:400;">· '
+                 'Carrier changes save instantly.</span></div>', unsafe_allow_html=True)
+    if sb2.button("💾  Save Changes", type="primary", use_container_width=True):
+        errs = []
+        new_npn = st.session_state.get("set_npn", "").strip()
+        if new_npn != tenant.get("npn", ""):
+            tenants.update_npn(st.session_state.tenant["username"], new_npn)
+            st.session_state.tenant["npn"] = new_npn
+        new_un = st.session_state.get("set_username", "").strip()
+        if new_un and new_un.lower() != tenant.get("username", "").lower():
+            try:
+                st.session_state.tenant.update(tenants.rename(st.session_state.tenant["username"], new_un))
+            except ValueError as e:
+                errs.append(str(e))
+        if errs:
+            st.error(" · ".join(errs))
         else:
-            st.caption("No states added yet — add the states you write business in below "
-                       "(leave this empty to include every state).")
-
-        # ── Add a state ──
-        remaining = [s for s in _US_STATES if s not in appts]
-        ac1, ac2 = st.columns([3, 1])
-        add_s = ac1.selectbox("Add a state", remaining,
-                              format_func=lambda s: _STATE_NAMES.get(s, s), key="appt_add",
-                              label_visibility="collapsed") if remaining else None
-        if add_s and ac2.button("Add state", use_container_width=True):
-            settings.save(agent_id, {**cfg, "appointments": {**appts, add_s: []}})
-            st.session_state["appt_edit"] = add_s
+            st.success("Saved.")
             st.rerun()
-
-        # ── Edit the selected state's carriers ──
-        if edit and edit in appts:
-            st.markdown("<div style='height:6px'></div>", unsafe_allow_html=True)
-            st.markdown(f"**Carriers you're appointed with in {_STATE_NAMES.get(edit, edit)}**")
-            opts = carrier_names.brand_options(roster, extra=appts.get(edit))
-            current = [c for c in (appts.get(edit) or []) if c in opts]
-            picked = st.multiselect("Pick every carrier you can write in this state",
-                                    opts, default=current, key=f"appt_carriers_{edit}",
-                                    label_visibility="collapsed")
-            b1, b2 = st.columns([1, 1])
-            if b1.button(f"Save {_STATE_NAMES.get(edit, edit)}", type="primary", use_container_width=True):
-                settings.save(agent_id, {**cfg, "appointments": {**appts, edit: sorted(picked)}})
-                st.success(f"Saved {_STATE_NAMES.get(edit, edit)}.")
-                st.rerun()
-            if b2.button(f"Remove {_STATE_NAMES.get(edit, edit)}", use_container_width=True):
-                settings.save(agent_id, {**cfg, "appointments": {k: v for k, v in appts.items() if k != edit}})
-                st.session_state.pop("appt_edit", None)
-                st.success(f"Removed {_STATE_NAMES.get(edit, edit)}.")
-                st.rerun()
-        elif appts:
-            st.caption("Click a state above to add or edit the carriers you're appointed with there.")
-
-    st.caption(f"Private workspace · `tenants/{agent_id}/`")
 
 
 def page_book(tenant: dict, roster) -> None:
