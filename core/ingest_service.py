@@ -118,6 +118,10 @@ def build_book(agent_id: str, npn: str = "", name: str = ""):
         roster.loc[gone, "status"] = "Cancelled"
         if "cancel_reason" in roster.columns:
             roster.loc[gone & (roster["cancel_reason"] == ""), "cancel_reason"] = "Left book"
+    # First upload: auto-detect the agent's states + carriers and turn them all on,
+    # so they don't have to set appointments by hand. After that we never touch it —
+    # anything they toggle off in Settings stays off.
+    _auto_seed_appointments(agent_id, roster)
     roster = rules.apply_agent_settings(roster, settings.get(agent_id))
     # Carrier-portal truth: reconcile the active book against the carrier exports
     # (Ambetter/Oscar/UHC/Anthem) the agent uploaded — the carrier's own system is
@@ -128,6 +132,29 @@ def build_book(agent_id: str, npn: str = "", name: str = ""):
     # term the older one) so a person never shows twice in the book.
     roster = rules.collapse_plan_switches(roster)
     return roster
+
+
+def _auto_seed_appointments(agent_id: str, roster) -> None:
+    """On the very first upload (no appointments configured yet), turn on every
+    state + carrier found in the agent's book, so they start with their real book
+    instead of a blank filter. Runs ONCE — the `appointments_initialized` flag then
+    keeps it from re-adding anything the agent later toggles off in Settings."""
+    from core import settings, carrier_names
+    cfg = settings.get(agent_id)
+    if cfg.get("appointments") or cfg.get("appointments_initialized"):
+        return  # already set up (auto or by hand) — respect the agent's choices
+    if roster is None or roster.empty or not {"state", "carrier"}.issubset(roster.columns):
+        return
+    derived = {}
+    for st, sub in roster.groupby(roster["state"].astype(str).str.upper().str.strip()):
+        st = str(st).strip()
+        if not st or st == "NAN":
+            continue
+        brands = sorted({carrier_names.brand_of(c) for c in sub["carrier"].dropna()
+                         if carrier_names.brand_of(c)})
+        if brands:
+            derived[st] = brands
+    settings.save(agent_id, {**cfg, "appointments": derived, "appointments_initialized": True})
 
 
 def _apply_carrier_truth(agent_id: str, roster):
