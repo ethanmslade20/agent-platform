@@ -733,16 +733,64 @@ def page_client_lookup(tenant: dict, roster) -> None:
 
 def page_commissions(tenant: dict, roster) -> None:
     st.title("Commissions")
-    st.caption("Projected commission from your active book (members × $23/mo). "
-               "Actual paid-commission tracking needs a payments feed — that comes later.")
+    st.caption("Projected commission from your active book (members × $23/mo), plus what that "
+               "book is worth over its lifetime. Actual paid-commission tracking needs a payments "
+               "feed — that comes later.")
+    st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
     if roster is None:
         _need_book(); return
     d = dashboard_kpis.compute(tenant["agent_id"], roster)
+    PMPM, MAX_TENURE = 23, 60
+    members = int(d["members"])
+    mom = d.get("mom")
+
+    # LTV from all-time churn (same basis as the Goals page).
+    if mom is not None and not getattr(mom, "empty", True) and {"Members Lost", "Total Members"}.issubset(mom.columns):
+        churn_rate = mom["Members Lost"].sum() / max(mom["Total Members"].sum(), 1)
+    else:
+        churn_rate = 0.0
+    tenure = min(1 / churn_rate if churn_rate > 0 else MAX_TENURE, MAX_TENURE)
+    ltv_per = round(PMPM * tenure)
+    book_ltv = members * ltv_per
+
+    # ── Recurring revenue ───────────────────────────────────────────────────────
+    _hdr("Recurring Revenue", "dollar")
     _cards([
-        ui.metric_card("Expected monthly", f"${d['comm_monthly']:,.0f}", icon_key="dollar", highlight="green"),
-        ui.metric_card("Expected annual", f"${d['comm_annual']:,.0f}", icon_key="calendar"),
-        ui.metric_card("Per policy / mo", f"${d['per_policy']:.2f}", icon_key="file"),
+        ui.metric_card("Expected Monthly", f"${d['comm_monthly']:,.0f}",
+                       sub=f"{members:,} members × ${PMPM}/mo", icon_key="dollar", highlight="green"),
+        ui.metric_card("Expected Annual", f"${d['comm_annual']:,.0f}", sub="MRR × 12 months", icon_key="calendar"),
+        ui.metric_card("Per Policy / Mo", f"${d['per_policy']:.2f}", sub="MRR ÷ active policies", icon_key="file"),
     ])
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # ── Lifetime value ──────────────────────────────────────────────────────────
+    _hdr("Lifetime Value", "trend")
+    _cards([
+        ui.metric_card("LTV per Member", f"${ltv_per:,}",
+                       sub=f"${PMPM}/mo × {tenure:.0f}-mo tenure", icon_key="users"),
+        ui.metric_card("Total Book LTV", f"${book_ltv:,.0f}",
+                       sub=f"{members:,} members × ${ltv_per:,}", icon_key="shield", highlight="green"),
+        ui.metric_card("Avg Client Tenure", f"{tenure:.0f} mo",
+                       sub=f"{churn_rate * 100:.2f}% monthly churn", icon_key="calendar"),
+    ])
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # ── Where the commission comes from (per carrier) ───────────────────────────
+    a = views.active(roster)
+    if not a.empty and "carrier" in a.columns:
+        a = a.copy()
+        a["_mem"] = pd.to_numeric(a.get("applicant_count"), errors="coerce").fillna(1).clip(lower=1)
+        g = a.groupby("carrier")["_mem"].sum().sort_values(ascending=False)
+        cc = g.reset_index()
+        cc.columns = ["Carrier", "Members"]
+        cc["Members"] = cc["Members"].astype(int)
+        cc["Monthly"] = (cc["Members"] * PMPM).map(lambda v: f"${v:,.0f}")
+        cc["Annual"] = (cc["Members"] * PMPM * 12).map(lambda v: f"${v:,.0f}")
+        with st.container(border=True):
+            st.markdown(ui.chart_head("Commission by Carrier", "Where your monthly commission comes from", "pie"),
+                        unsafe_allow_html=True)
+            st.dataframe(cc, use_container_width=True, hide_index=True,
+                         height=min(46 + 35 * (len(cc) + 1), 460))
 
 
 # Goal input-card icons + KPI-tile styling (mirrors Ethan's Goals page look).
