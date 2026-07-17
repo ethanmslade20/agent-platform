@@ -11,7 +11,9 @@ of their own clients.
 """
 from __future__ import annotations
 
+import datetime as dt
 import io
+import json
 import zipfile
 from pathlib import Path
 
@@ -20,6 +22,41 @@ from tracker.diff import build_all_clients
 from tracker.ingest import ingest_file, load_all_snapshots
 
 from core import paths, store
+
+
+def _uploads_file(agent_id: str) -> Path:
+    return paths.tenant_root(agent_id) / "uploads.json"
+
+
+def _record_upload(agent_id: str, source: str) -> None:
+    """Stamp the time a given source (healthsherpa / a carrier key) was uploaded."""
+    p = _uploads_file(agent_id)
+    if store.using_db() and not p.exists():
+        store.hydrate(agent_id, paths.tenant_root(agent_id))
+    data = {}
+    if p.exists():
+        try:
+            data = json.loads(p.read_text())
+        except Exception:
+            data = {}
+    data[source] = dt.datetime.now().isoformat(timespec="seconds")
+    paths.ensure_dirs(agent_id)
+    p.write_text(json.dumps(data, indent=2))
+    if store.using_db():
+        store.put_file(agent_id, "uploads.json", p.read_bytes())
+
+
+def last_uploads(agent_id: str) -> dict:
+    """{source: ISO timestamp} of the last upload of each file, or {}."""
+    p = _uploads_file(agent_id)
+    if store.using_db() and not p.exists():
+        store.hydrate(agent_id, paths.tenant_root(agent_id))
+    if p.exists():
+        try:
+            return json.loads(p.read_text())
+        except Exception:
+            pass
+    return {}
 
 _ROOT = Path(__file__).resolve().parent.parent
 _CARRIER_CFG = str(_ROOT / "config" / "carrier_configs.yaml")
@@ -68,6 +105,7 @@ def ingest_healthsherpa(agent_id: str, data: bytes, npn: str = "", name: str = "
     snap, df = ingest_file(dest, source_configs, paths.snapshots_dir(agent_id), month=month)
     if store.using_db() and snap:
         store.put_file(agent_id, f"snapshots/{Path(snap).name}", Path(snap).read_bytes())
+    _record_upload(agent_id, "healthsherpa")
     return snap, df
 
 
@@ -90,6 +128,7 @@ def save_carrier(agent_id: str, carrier: str, data: bytes) -> Path:
         dest.write_bytes(data)
     if store.using_db():
         store.put_file(agent_id, f"carrier_books/{dest.name}", dest.read_bytes())
+    _record_upload(agent_id, carrier)
     return dest
 
 

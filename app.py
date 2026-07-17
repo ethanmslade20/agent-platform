@@ -190,6 +190,32 @@ def login_screen() -> None:
 
 
 # ── Pages ───────────────────────────────────────────────────────────────────
+def _ago(iso: str) -> str:
+    """Human 'x ago' from an ISO timestamp."""
+    try:
+        t = dt.datetime.fromisoformat(iso)
+    except Exception:
+        return ""
+    secs = (dt.datetime.now() - t).total_seconds()
+    if secs < 90:
+        return "just now"
+    if secs < 5400:
+        return f"{int(secs // 60)} min ago"
+    if secs < 129600:
+        return f"{int(secs // 3600)} hr ago"
+    if secs < 1209600:
+        return f"{int(secs // 86400)} days ago"
+    return t.strftime("%b %d, %Y")
+
+
+def _last_up(ups: dict, key: str) -> None:
+    """Caption showing when a source was last uploaded (nothing if never)."""
+    if ups.get(key):
+        st.caption(f"✅ Last uploaded {_ago(ups[key])}")
+    else:
+        st.caption("—  not uploaded yet")
+
+
 def page_upload(tenant: dict) -> None:
     agent_id = tenant["agent_id"]
     st.title("Upload your files")
@@ -203,9 +229,11 @@ def page_upload(tenant: dict) -> None:
                    "we can't tell which clients in the file are yours.", icon="⚠️")
         return
 
+    ups = ingest_service.last_uploads(agent_id)
     st.subheader("HealthSherpa export  ·  required")
     st.caption("Clients → Export · Custom date range 01/01/2025 → today · both boxes checked.")
     hs = st.file_uploader("HealthSherpa (.csv)", type=["csv"], key="hs")
+    _last_up(ups, "healthsherpa")
     if hs is not None and st.button("Build my book from this file", type="primary"):
         try:
             with st.spinner("Reading your export and building your book…"):
@@ -237,6 +265,7 @@ def page_upload(tenant: dict) -> None:
     for i, (key, spec) in enumerate(ingest_service.carriers().items()):
         with cols[i % 2]:
             up = st.file_uploader(f"{spec['label']} (.{spec['types'][0]})", type=spec["types"], key=key)
+            _last_up(ups, key)
             if up is not None:
                 try:
                     ingest_service.save_carrier(agent_id, key, up.getvalue())
@@ -1583,6 +1612,14 @@ def workspace() -> None:
             st.session_state["nav"] = st.session_state.pop("_pending_nav")
         page = st.radio("Go to", _NAV, key="nav", label_visibility="collapsed")
         st.divider()
+        if st.button("🔄  Refresh data", use_container_width=True,
+                     help="Re-pull your latest data and redraw — without signing out."):
+            from core import store
+            if store.using_db():
+                store.hydrate(agent_id, paths.tenant_root(agent_id))
+            st.cache_data.clear()
+            st.toast("Data refreshed.")
+            st.rerun()
         if st.button("Log out", use_container_width=True):
             st.session_state.tenant = None
             st.rerun()
