@@ -22,6 +22,43 @@ ACTIVE = ("Effectuated", "PendingEffectuation", "PendingFollowups")
 CHURNED = ("Cancelled", "Terminated")
 REASON_TAKEN = "AOR taken"
 REASON_VEXP = "Verification expired"
+REASON_SWITCH = "Plan switch"
+
+
+def collapse_plan_switches(roster: pd.DataFrame) -> pd.DataFrame:
+    """One client, one active policy. If a person shows more than one active
+    policy (a plan switch — e.g. Ambetter → UnitedHealthcare), keep the newest by
+    effective date active and mark the older ones Terminated ('Plan switch').
+    They're flagged term_estimated so a switch is NOT miscounted as a real loss in
+    the churn/loss averages, and they're excluded from the Re-Engage list."""
+    if roster is None or roster.empty or "status" not in roster.columns:
+        return roster
+    df = roster.copy()
+    if "cancel_reason" not in df.columns:
+        df["cancel_reason"] = ""
+    if "term_estimated" not in df.columns:
+        df["term_estimated"] = False
+
+    def _pk(f, l):
+        s = f"{f} {l}".lower()
+        return re.sub(r"[^a-z]", "", s)
+
+    df["_pk"] = [_pk(f, l) for f, l in zip(df.get("first_name", ""), df.get("last_name", ""))]
+    df["_eff"] = pd.to_datetime(df.get("effective_date"), errors="coerce")
+    active = df["status"].isin(ACTIVE)
+    counts = df.loc[active, "_pk"].value_counts()
+    for k in counts[counts > 1].index:
+        if not k:
+            continue
+        grp = df[active & (df["_pk"] == k)].sort_values("_eff", ascending=False, na_position="last")
+        newest_eff = grp.iloc[0]["_eff"]
+        for idx in grp.index[1:]:  # everyone except the newest policy
+            df.at[idx, "status"] = "Terminated"
+            df.at[idx, "cancel_reason"] = REASON_SWITCH
+            df.at[idx, "term_estimated"] = True
+            if "term_date" in df.columns and pd.isna(pd.to_datetime(df.at[idx, "term_date"], errors="coerce")):
+                df.at[idx, "term_date"] = newest_eff
+    return df.drop(columns=["_pk", "_eff"])
 
 
 def apply_book_rules(roster: pd.DataFrame, npn: str = "", name: str = "") -> pd.DataFrame:

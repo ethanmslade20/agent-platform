@@ -124,6 +124,9 @@ def build_book(agent_id: str, npn: str = "", name: str = ""):
     # the source of truth for who's really in force. No-op for any carrier not
     # uploaded. This is what brings the numbers in line with Ethan's site.
     roster = _apply_carrier_truth(agent_id, roster)
+    # One client, one active policy — collapse plan switches (keep newest active,
+    # term the older one) so a person never shows twice in the book.
+    roster = rules.collapse_plan_switches(roster)
     return roster
 
 

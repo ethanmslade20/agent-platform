@@ -31,7 +31,9 @@ def losses(roster: pd.DataFrame) -> pd.DataFrame:
     verification (those have their own pages), matching Ethan's site."""
     churned = roster[roster["status"].isin(LOST)]
     if "cancel_reason" in churned.columns:
-        churned = churned[~churned["cancel_reason"].isin(["AOR taken", "Verification expired"])]
+        # Plan switches are retained clients (moved to a newer plan), not losses.
+        churned = churned[~churned["cancel_reason"].isin(
+            ["AOR taken", "Verification expired", "Plan switch"])]
     return churned.copy()
 
 
