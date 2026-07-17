@@ -927,6 +927,17 @@ def page_settings(tenant: dict, roster) -> None:
         st.markdown(ui.chart_head("Your profile", "Your NPN keeps your book scoped to you", "shield"),
                     unsafe_allow_html=True)
         st.write(f"**Agent:** {tenant.get('name') or tenant.get('username')}")
+        with st.form("username_form"):
+            new_un = st.text_input("Username", value=tenant.get("username", ""),
+                                   help="What you sign in with. Changing it keeps all your data.")
+            if st.form_submit_button("Save username", type="primary"):
+                try:
+                    updated = tenants.rename(tenant["username"], new_un)
+                    st.session_state.tenant.update(updated)
+                    st.success(f"Username updated to '{updated['username']}'.")
+                    st.rerun()
+                except ValueError as e:
+                    st.error(str(e))
         with st.form("npn_form"):
             npn = st.text_input("Your NPN (National Producer Number)", value=tenant.get("npn", ""),
                                 help="Keeps only YOUR clients when you upload. Set it before your first upload.")

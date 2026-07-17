@@ -94,6 +94,13 @@ def save_tenants(d: dict) -> None:
     _run(run)
 
 
+def delete_tenant(username: str) -> None:
+    def run(conn):
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM tenants WHERE username=%s", (username,))
+    _run(run)
+
+
 # ── Uploaded book blobs ──────────────────────────────────────────────────────
 def put_file(agent_id: str, relpath: str, data: bytes) -> None:
     import psycopg2

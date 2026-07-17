@@ -91,6 +91,30 @@ def update_npn(username: str, npn: str) -> None:
         _save(d)
 
 
+def rename(old_username: str, new_username: str) -> dict:
+    """Change an agent's login username, keeping their agent_id (and all data).
+    Raises ValueError if the new name is empty, taken, or the account is missing."""
+    old = (old_username or "").lower().strip()
+    new = (new_username or "").lower().strip()
+    if not new:
+        raise ValueError("Username can't be empty.")
+    if " " in new:
+        raise ValueError("Username can't contain spaces.")
+    d = _load()
+    if old not in d:
+        raise ValueError("Account not found.")
+    if new == old:
+        return _public(old, d[old])
+    if new in d:
+        raise ValueError(f"Username '{new}' is already taken.")
+    d[new] = d.pop(old)
+    _save(d)
+    from core import store
+    if store.using_db():
+        store.delete_tenant(old)  # _save upserts the new row; drop the stale old one
+    return _public(new, d[new])
+
+
 def verify(username: str, password: str) -> dict | None:
     """Return the tenant's public record on a correct login, else None."""
     d = _load()
