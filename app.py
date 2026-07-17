@@ -223,9 +223,10 @@ def page_upload(tenant: dict) -> None:
                 roster = ingest_service.build_book(agent_id, tenant.get("npn", ""), tenant.get("name", ""))
                 if roster is not None:
                     updates.compute_and_log(agent_id, roster)
-                st.success(f"Done — read {len(df):,} rows. Your update summary is on the "
-                           f"**Book Updates** page.")
-                st.session_state["nav"] = "Book Updates"
+                st.success(f"Done — read {len(df):,} rows. Taking you to your **Book Updates**…")
+                # Redirect on the next run (the nav radio is already drawn this run).
+                st.session_state["_pending_nav"] = "Book Updates"
+                st.rerun()
         except (Exception, SystemExit) as e:
             st.error(f"Couldn't read that file: {e}")
 
@@ -1045,6 +1046,10 @@ def workspace() -> None:
             unsafe_allow_html=True)
         st.caption(tenant.get("name") or tenant.get("username"))
         _nav_css()
+        # Apply a pending redirect BEFORE the radio is drawn — Streamlit won't let
+        # us change a widget's state after it's instantiated.
+        if "_pending_nav" in st.session_state:
+            st.session_state["nav"] = st.session_state.pop("_pending_nav")
         page = st.radio("Go to", _NAV, key="nav", label_visibility="collapsed")
         st.divider()
         if st.button("Log out", use_container_width=True):
