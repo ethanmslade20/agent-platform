@@ -48,11 +48,19 @@ def build_dashboard_data(
     sorted_months = sorted(months.keys())
 
     # ── MoM table first (needed for KPI averages) ────────────────────────────
-    # Start from the earliest real snapshot month, not earliest effective_date.
-    # Months before the first snapshot are reconstructed guesses — no cancellation
-    # data exists for them, so they'd show false 0% churn.
-    first_snapshot_month = sorted_months[0] if sorted_months else None
-    mom_df = _build_mom_from_all_clients(all_clients, start_month=first_snapshot_month)
+    # A single HealthSherpa export already carries every policy's effective + term
+    # date, so we reconstruct the FULL monthly history from the data itself rather
+    # than only from the months an agent happens to have uploaded (an agent with
+    # one upload would otherwise average losses over a single month — wildly off).
+    # We then trim the leading ramp-up months where the book was < 1% of its
+    # current size, so loss/churn/growth averages reflect the real book — not a
+    # one-month spike, and not a multi-year span diluted by near-empty early months.
+    mom_df = _build_mom_from_all_clients(all_clients, start_month=None)
+    if not mom_df.empty and "Total Policies" in mom_df.columns and len(mom_df) > 1:
+        _cur = mom_df["Total Policies"].iloc[-1]
+        _meaningful = mom_df[mom_df["Total Policies"] >= 0.01 * _cur]
+        if not _meaningful.empty:
+            mom_df = _meaningful.reset_index(drop=True)
 
     # ── KPIs ──────────────────────────────────────────────────────────────────
     active_df = all_clients[
