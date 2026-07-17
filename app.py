@@ -465,7 +465,13 @@ def page_daily(tenant: dict, roster) -> None:
     with col_chart, st.container(border=True):
         st.markdown(ui.chart_head("Submissions by Day", "Policies submitted per day this month", "bars"),
                     unsafe_allow_html=True)
-        ui.show_chart(charts.daily_month_fig(ddf))
+        fig = charts.daily_month_fig(ddf)
+        fig.update_xaxes(fixedrange=True); fig.update_yaxes(fixedrange=True)
+        fig.update_layout(dragmode=False)
+        evt = st.plotly_chart(fig, use_container_width=True, on_select="rerun",
+                              key=f"daily_chart_{ym}",
+                              config={"displayModeBar": False, "scrollZoom": False, "doubleClick": False})
+        st.caption("💡 Click any bar to see who you signed that day.")
     with col_table, st.container(border=True):
         st.markdown(ui.chart_head("Day-by-Day Breakdown", "Daily policies & members", "calendar"),
                     unsafe_allow_html=True)
@@ -479,6 +485,45 @@ def page_daily(tenant: dict, roster) -> None:
                 "Members": st.column_config.ProgressColumn(
                     "Members", min_value=0, max_value=max(int(ddf["Members"].max()), 1), format="%d"),
             })
+
+    # ── Drill-down: who you signed on the clicked day ─────────────────────────
+    clicked_day = None
+    try:
+        pts = evt.selection.points if (evt and getattr(evt, "selection", None)) else []
+        if pts:
+            clicked_day = pts[0].get("x")
+    except Exception:
+        clicked_day = None
+
+    st.markdown("<br>", unsafe_allow_html=True)
+    with st.container(border=True):
+        if not clicked_day:
+            st.markdown(ui.chart_head("Policies for a Day",
+                                      "Click a bar above to see who you signed that day", "users"),
+                        unsafe_allow_html=True)
+        else:
+            col = "submission_date" if "submission_date" in roster.columns else "effective_date"
+            dts = pd.to_datetime(roster.get(col), errors="coerce")
+            try:
+                day_date = pd.to_datetime(f"{clicked_day} {year}", format="%b %d %Y").date()
+            except Exception:
+                day_date = None
+            rows = roster[dts.dt.date == day_date] if day_date else roster.iloc[0:0]
+            mem = int(pd.to_numeric(rows.get("applicant_count"), errors="coerce").fillna(1).clip(lower=1).sum())
+            st.markdown(ui.chart_head(f"Policies submitted — {clicked_day}",
+                                      f"{len(rows)} policies · {mem} members", "users"),
+                        unsafe_allow_html=True)
+            if rows.empty:
+                st.info("No policies recorded for that day.")
+            else:
+                show = pd.DataFrame({
+                    "Name": (rows["first_name"].fillna("") + " " + rows["last_name"].fillna("")).str.strip().str.title(),
+                    "Members": pd.to_numeric(rows.get("applicant_count"), errors="coerce").fillna(1).clip(lower=1).astype(int),
+                    "Carrier": rows.get("carrier", ""),
+                    "State": rows.get("state", ""),
+                }).sort_values("Name")
+                st.dataframe(show, use_container_width=True, hide_index=True,
+                             height=min(80 + len(show) * 35, 460))
 
 
 def page_trends(tenant: dict, roster) -> None:
