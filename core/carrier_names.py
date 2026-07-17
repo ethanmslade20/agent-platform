@@ -89,9 +89,7 @@ MASTER: list[str] = [
 _BRANDS = [
     ("Ambetter", ["ambetter"]),
     ("Oscar", ["oscar"]),
-    ("Wellpoint", ["wellpoint"]),
-    # Anthem before Blue Cross so Anthem-branded Blue Cross entities resolve to Anthem.
-    ("Anthem", ["anthem", "amgp", "compcare"]),
+    ("Anthem / Wellpoint", ["anthem", "wellpoint", "amgp", "compcare"]),
     ("Blue Cross Blue Shield", ["blue cross", "bluecross", "blue shield", "blueshield",
                                 "bcbs", "florida blue", "regence", "blue care network",
                                 "hmo louisiana"]),
