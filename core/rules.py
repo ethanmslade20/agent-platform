@@ -41,7 +41,13 @@ def apply_book_rules(roster: pd.DataFrame, npn: str = "", name: str = "") -> pd.
     df.loc[vexp, "status"] = "Cancelled"
     df.loc[vexp, "cancel_reason"] = REASON_VEXP
 
-    # ── AOR-taken → Terminated (foreign agent-of-record) ──────────────────────
+    # ── AOR-taken (foreign agent-of-record) ───────────────────────────────────
+    # HealthSherpa's policy_aor field LAGS the exchange (Ethan's site proved this),
+    # so we do NOT drop an active client from the book on the raw field alone — that
+    # over-removes real clients. The carrier portals (carrier-truth) are the truth
+    # for who's really in force; the AOR field only *flags* at-risk clients on the
+    # AOR Defense page (views.aor_taken reads policy_aor directly). We just tag the
+    # reason for anyone ALREADY churned so Re-Engage/Book Updates can bucket them.
     if "policy_aor" in df.columns:
         aor = df["policy_aor"].fillna("").astype(str)
         parts = [p for p in (name or "").lower().split() if p]
@@ -57,15 +63,10 @@ def apply_book_rules(roster: pd.DataFrame, npn: str = "", name: str = "") -> pd.
             return True
 
         taken = aor.apply(_foreign)
-        # Propagate to the whole person: if ANY of their rows shows a foreign AOR,
-        # the client is taken (matches the marketplace-wins rule).
         pk = (df["first_name"].fillna("").astype(str).str.lower().str.strip() + "|"
               + df["last_name"].fillna("").astype(str).str.lower().str.strip())
         taken = pk.isin(set(pk[taken]))
-
-        newly = taken & ~df["status"].isin(CHURNED)
-        df.loc[newly, "status"] = "Terminated"
-        # Tag the reason (don't overwrite a verification-expired tag).
+        # Only label already-churned clients (don't change any active client's status).
         tag = taken & df["status"].isin(CHURNED) & (df["cancel_reason"] == "")
         df.loc[tag, "cancel_reason"] = REASON_TAKEN
 
