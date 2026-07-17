@@ -361,10 +361,11 @@ def page_dashboard(tenant: dict, roster) -> None:
         ui.metric_card("Commission Per Policy / Mo", f"${d['per_policy']:.2f}", icon_key="file"),
     ])
 
-    if d["history_months"] < 2:
+    _mom_len = 0 if (mom is None or getattr(mom, "empty", True)) else len(mom)
+    if _mom_len < 3:
         st.caption(
-            "Growth metrics reflect your latest upload. They sharpen into true "
-            "month-over-month averages as you upload each month."
+            "Not much dated history in this upload yet — growth metrics sharpen as "
+            "more of your book's history comes through."
         )
 
     # ── Book age ──────────────────────────────────────────────────────────────
