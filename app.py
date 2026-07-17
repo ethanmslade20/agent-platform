@@ -323,14 +323,18 @@ def page_dashboard(tenant: dict, roster) -> None:
             return "—"
         return f"{'+' if plus and v >= 0 else ''}{v:,.1f}"
 
-    # First month of the agent's data drives the "since" sublabels (dynamic per agent).
-    first_label, first_abbr = "your first month", "start"
+    # "Added / month" averages over year-to-date (Feb of the current year forward),
+    # matching Ethan's site — so the sublabel must show that YTD window, not the
+    # book's earliest month.
+    added_label, added_abbr = "your first month", "start"
     if mom is not None and not getattr(mom, "empty", True) and "Month" in mom.columns:
-        _fm = pd.to_datetime(mom["Month"], errors="coerce").min()
-        if pd.notna(_fm):
-            first_label, first_abbr = _fm.strftime("%b %Y"), _fm.strftime("%b")
-    since_sub = f"{first_label} – present"
-    net_sub = f"Added ({first_abbr}+) minus Lost (all-time)"
+        _ytd = mom[mom["Month"] >= f"{dt.date.today().year}-02"]
+        _win = _ytd if not _ytd.empty else mom
+        _aw = pd.to_datetime(_win["Month"], errors="coerce").min()
+        if pd.notna(_aw):
+            added_label, added_abbr = _aw.strftime("%b %Y"), _aw.strftime("%b")
+    since_sub = f"{added_label} – present"
+    net_sub = f"Added ({added_abbr}+) minus Lost (all-time)"
 
     _hdr("Book Snapshot", "book")
     _cards([
