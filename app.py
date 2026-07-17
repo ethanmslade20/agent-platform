@@ -11,8 +11,8 @@ import os
 import pandas as pd
 import streamlit as st
 
-from core import (charts, daily, dashboard_kpis, ingest_service, paths, settings, tenants,
-                  ui, updates, views)
+from core import (carrier_names, charts, daily, dashboard_kpis, ingest_service, paths,
+                  settings, tenants, ui, updates, views)
 
 # The product name your agents see. Placeholder — change it here anytime.
 APP_NAME = "Agent Book"
@@ -847,27 +847,19 @@ _US_STATES = ["AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "FL", "GA", "HI", 
               "NC", "ND", "NE", "NH", "NJ", "NM", "NV", "NY", "OH", "OK", "OR", "PA", "RI",
               "SC", "SD", "TN", "TX", "UT", "VA", "VT", "WA", "WI", "WV", "WY"]
 
-# Friendly carrier name → keyword(s) matched (case-insensitive substring) against
-# the client's carrier. Stored appointments hold the keywords.
-_CARRIERS_UI = {
-    "Ambetter": ["ambetter"],
-    "Oscar": ["oscar"],
-    "Anthem / Wellpoint": ["anthem", "wellpoint"],
-    "UnitedHealthcare": ["united", "uhc"],
-    "Blue Cross Blue Shield": ["blue cross", "blue shield", "bcbs", "bcbst"],
-    "Cigna": ["cigna"],
-    "Molina": ["molina"],
-    "Aetna / Coventry": ["aetna", "coventry"],
-    "CareSource": ["caresource"],
-    "SelectHealth": ["selecthealth", "select health"],
-    "Allstate": ["allstate"],
-    "Golden Rule": ["golden rule"],
+_STATE_NAMES = {
+    "AL": "Alabama", "AK": "Alaska", "AZ": "Arizona", "AR": "Arkansas", "CA": "California",
+    "CO": "Colorado", "CT": "Connecticut", "DE": "Delaware", "FL": "Florida", "GA": "Georgia",
+    "HI": "Hawaii", "IA": "Iowa", "ID": "Idaho", "IL": "Illinois", "IN": "Indiana", "KS": "Kansas",
+    "KY": "Kentucky", "LA": "Louisiana", "MA": "Massachusetts", "MD": "Maryland", "ME": "Maine",
+    "MI": "Michigan", "MN": "Minnesota", "MO": "Missouri", "MS": "Mississippi", "MT": "Montana",
+    "NC": "North Carolina", "ND": "North Dakota", "NE": "Nebraska", "NH": "New Hampshire",
+    "NJ": "New Jersey", "NM": "New Mexico", "NV": "Nevada", "NY": "New York", "OH": "Ohio",
+    "OK": "Oklahoma", "OR": "Oregon", "PA": "Pennsylvania", "RI": "Rhode Island",
+    "SC": "South Carolina", "SD": "South Dakota", "TN": "Tennessee", "TX": "Texas", "UT": "Utah",
+    "VA": "Virginia", "VT": "Vermont", "WA": "Washington", "WI": "Wisconsin", "WV": "West Virginia",
+    "WY": "Wyoming",
 }
-
-
-def _carriers_for(keywords: list) -> list:
-    kw = [str(x).lower() for x in (keywords or [])]
-    return [name for name, ks in _CARRIERS_UI.items() if any(k in kw for k in ks)]
 
 
 def page_settings(tenant: dict, roster) -> None:
@@ -894,56 +886,58 @@ def page_settings(tenant: dict, roster) -> None:
                                   "Only clients in these states, on carriers you're appointed with, "
                                   "count in your book", "pin"), unsafe_allow_html=True)
         appts = cfg.get("appointments", {}) or {}
+        edit = st.session_state.get("appt_edit")
 
+        # ── Your active states (click one to edit its carriers) ──
+        st.markdown("**Your states**")
         if appts:
-            rows = [{"State": s, "Appointed carriers": ", ".join(_carriers_for(kw)) or ", ".join(kw)}
-                    for s, kw in sorted(appts.items())]
-            st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+            active_states = sorted(appts, key=lambda s: _STATE_NAMES.get(s, s))
+            per_row = 4
+            for i in range(0, len(active_states), per_row):
+                cols = st.columns(per_row)
+                for col, s in zip(cols, active_states[i:i + per_row]):
+                    n = len(appts.get(s) or [])
+                    label = f"📍 {_STATE_NAMES.get(s, s)} · {n} carrier{'s' if n != 1 else ''}"
+                    if col.button(label, key=f"pick_{s}", use_container_width=True,
+                                  type=("primary" if s == edit else "secondary")):
+                        st.session_state["appt_edit"] = s
+                        st.rerun()
         else:
             st.caption("No states added yet — add the states you write business in below "
                        "(leave this empty to include every state).")
 
-        st.markdown("**Add or edit a state**")
-        stt = st.selectbox("State", _US_STATES, key="appt_state")
-        default_c = _carriers_for(appts.get(stt, []))
-        picked = st.multiselect(f"Carriers you're appointed with in {stt}",
-                                list(_CARRIERS_UI), default=default_c, key=f"appt_carriers_{stt}")
-        b1, b2 = st.columns(2)
-        if b1.button(f"Save {stt}", type="primary", use_container_width=True):
-            kws = sorted({k for c in picked for k in _CARRIERS_UI[c]})
-            new = {**appts}
-            if kws:
-                new[stt] = kws
-            else:
-                new.pop(stt, None)
-            settings.save(agent_id, {**cfg, "appointments": new})
-            st.success(f"Saved {stt}.")
-            st.rerun()
-        if stt in appts and b2.button(f"Remove {stt}", use_container_width=True):
-            settings.save(agent_id, {**cfg, "appointments": {k: v for k, v in appts.items() if k != stt}})
-            st.success(f"Removed {stt}.")
+        # ── Add a state ──
+        remaining = [s for s in _US_STATES if s not in appts]
+        ac1, ac2 = st.columns([3, 1])
+        add_s = ac1.selectbox("Add a state", remaining,
+                              format_func=lambda s: _STATE_NAMES.get(s, s), key="appt_add",
+                              label_visibility="collapsed") if remaining else None
+        if add_s and ac2.button("Add state", use_container_width=True):
+            settings.save(agent_id, {**cfg, "appointments": {**appts, add_s: []}})
+            st.session_state["appt_edit"] = add_s
             st.rerun()
 
-    # ── Excluded clients ──────────────────────────────────────────────────────
-    with st.container(border=True):
-        st.markdown(ui.chart_head("Excluded clients", "Hidden from your book entirely (e.g. never-sold "
-                                  "noise)", "minus"), unsafe_allow_html=True)
-        excl = cfg.get("exclusions", [])
-        if excl:
-            st.dataframe(pd.DataFrame(excl).rename(columns={"first": "First", "last": "Last", "state": "State"}),
-                         use_container_width=True, hide_index=True)
-        else:
-            st.caption("None yet.")
-        with st.form("excl_form"):
-            c1, c2, c3 = st.columns(3)
-            f = c1.text_input("First name")
-            l = c2.text_input("Last name")
-            s = c3.text_input("State", max_chars=2, placeholder="GA")
-            if st.form_submit_button("Add exclusion") and f.strip() and l.strip():
-                excl = excl + [{"first": f.strip(), "last": l.strip(), "state": s.strip().upper()}]
-                settings.save(agent_id, {**cfg, "exclusions": excl})
-                st.success(f"Excluded {f} {l}.")
+        # ── Edit the selected state's carriers ──
+        if edit and edit in appts:
+            st.markdown("<div style='height:6px'></div>", unsafe_allow_html=True)
+            st.markdown(f"**Carriers you're appointed with in {_STATE_NAMES.get(edit, edit)}**")
+            opts = carrier_names.options(roster, extra=appts.get(edit))
+            current = [c for c in (appts.get(edit) or []) if c in opts]
+            picked = st.multiselect("Pick every carrier you can write in this state",
+                                    opts, default=current, key=f"appt_carriers_{edit}",
+                                    label_visibility="collapsed")
+            b1, b2 = st.columns([1, 1])
+            if b1.button(f"Save {_STATE_NAMES.get(edit, edit)}", type="primary", use_container_width=True):
+                settings.save(agent_id, {**cfg, "appointments": {**appts, edit: sorted(picked)}})
+                st.success(f"Saved {_STATE_NAMES.get(edit, edit)}.")
                 st.rerun()
+            if b2.button(f"Remove {_STATE_NAMES.get(edit, edit)}", use_container_width=True):
+                settings.save(agent_id, {**cfg, "appointments": {k: v for k, v in appts.items() if k != edit}})
+                st.session_state.pop("appt_edit", None)
+                st.success(f"Removed {_STATE_NAMES.get(edit, edit)}.")
+                st.rerun()
+        elif appts:
+            st.caption("Click a state above to add or edit the carriers you're appointed with there.")
 
     st.caption(f"Private workspace · `tenants/{agent_id}/`")
 
