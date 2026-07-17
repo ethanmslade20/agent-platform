@@ -156,16 +156,21 @@ def login_screen() -> None:
                 new_name = st.text_input("Agent's name", placeholder="Full name")
                 new_user = st.text_input("Choose a username", placeholder="Pick a username")
                 new_pass = st.text_input("Choose a password", type="password", placeholder="Pick a password")
+                new_npn = st.text_input("Your NPN", placeholder="National Producer Number")
+                st.caption("Your NPN is what pulls only *your* clients out of an upload — it's required.")
                 code = st.text_input("Invite code", type="password", placeholder="Enter your invite code")
                 created = st.form_submit_button("Create account", use_container_width=True)
             if created:
+                npn = (new_npn or "").strip()
                 if code.strip() != invite:
                     st.error("Invalid invite code.")
                 elif not (new_user.strip() and new_pass.strip()):
                     st.error("Username and password are required.")
+                elif not npn.isdigit() or not (5 <= len(npn) <= 10):
+                    st.error("Enter a valid NPN — 5 to 10 digits, numbers only.")
                 else:
                     try:
-                        tenants.create_tenant(new_user.strip(), new_pass, (new_name or new_user).strip())
+                        tenants.create_tenant(new_user.strip(), new_pass, (new_name or new_user).strip(), npn=npn)
                         tenant = tenants.verify(new_user.strip(), new_pass)
                         paths.ensure_dirs(tenant["agent_id"])
                         st.session_state.tenant = tenant
@@ -182,6 +187,11 @@ def page_upload(tenant: dict) -> None:
         "HealthSherpa builds your whole book. The carrier files add your payments, "
         "disputes, and policy IDs on top."
     )
+
+    if not str(tenant.get("npn", "")).strip():
+        st.warning("Set your **NPN** on the **Settings** page before uploading — without it "
+                   "we can't tell which clients in the file are yours.", icon="⚠️")
+        return
 
     st.subheader("HealthSherpa export  ·  required")
     st.caption("Clients → Export · Custom date range 01/01/2025 → today · both boxes checked.")
