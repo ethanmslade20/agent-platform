@@ -527,18 +527,48 @@ def page_daily(tenant: dict, roster) -> None:
 
 
 def page_trends(tenant: dict, roster) -> None:
-    st.title("Monthly Trends")
-    st.caption("Policies added vs lost, month over month.")
+    st.title("Month-over-Month Trends")
+    st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
     if roster is None:
         _need_book(); return
     d = dashboard_kpis.compute(tenant["agent_id"], roster)
     mom = d.get("mom") if d else None
-    fig = charts.trends_fig(mom)
-    if fig is None:
-        st.info("Upload a few months of exports and the trend fills in here."); return
-    ui.show_chart(fig)
-    if mom is not None and not mom.empty:
-        st.dataframe(mom, use_container_width=True, hide_index=True)
+    if mom is None or getattr(mom, "empty", True):
+        st.info("No month-over-month data available yet."); return
+
+    mom_plot = mom.copy()
+    mom_plot["Month Label"] = mom_plot["Month"].apply(
+        lambda m: pd.Timestamp(str(m) + "-01").strftime("%b %Y"))
+
+    # ── Total members over time ─────────────────────────────────────────────────
+    with st.container(border=True):
+        st.markdown(ui.chart_head("Total Active Members Over Time",
+                                  "Cumulative active members by month", "trend"), unsafe_allow_html=True)
+        ui.show_chart(charts.members_over_time_fig(mom_plot))
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # ── New vs Lost (policies + members) ────────────────────────────────────────
+    col_l, col_r = st.columns(2)
+    with col_l, st.container(border=True):
+        st.markdown(ui.chart_head("New vs. Lost Policies", "Policies added vs. lost each month", "bars"),
+                    unsafe_allow_html=True)
+        ui.show_chart(charts.new_vs_lost_fig(mom_plot, "New Policies", "Policies Lost"))
+    with col_r, st.container(border=True):
+        st.markdown(ui.chart_head("New vs. Lost Members", "Members added vs. lost each month", "bars"),
+                    unsafe_allow_html=True)
+        ui.show_chart(charts.new_vs_lost_fig(mom_plot, "New Members", "Members Lost"))
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # ── Full trend table ────────────────────────────────────────────────────────
+    with st.container(border=True):
+        st.markdown(ui.chart_head("Full Trend Table", "Month-by-month detail", "calendar"),
+                    unsafe_allow_html=True)
+        disp = mom_plot.drop(columns=["Month"]).rename(columns={"Month Label": "Month"})
+        disp = disp[["Month"] + [c for c in disp.columns if c != "Month"]]
+        st.dataframe(disp, use_container_width=True, hide_index=True, column_config={
+            "% Growth": st.column_config.NumberColumn("% Growth", format="%.1f%%"),
+            "Net Change": st.column_config.NumberColumn("Net Change", format="%+d"),
+        })
 
 
 _LOOKUP_CSS = """<style>
@@ -1117,18 +1147,98 @@ def page_settings(tenant: dict, roster) -> None:
 
 
 def page_book(tenant: dict, roster) -> None:
-    st.title("My Book")
+    st.title("Book of Business")
+    st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
     if roster is None:
         _need_book(); return
-    a = views.active(roster)
-    members = pd.to_numeric(a.get("applicant_count"), errors="coerce").fillna(1).clip(lower=1).sum()
+
+    df_all = roster.copy()
+    df_all["status_display"] = df_all["status"].replace({"PendingEffectuation": "Effectuated"})
+    active_sts = set(views.ACTIVE)
+
+    # ── Filters ─────────────────────────────────────────────────────────────────
+    f1, f2, f3, f4 = st.columns([2, 2, 2, 3])
+    sel_status = f1.selectbox("Status", ["All"] + sorted(df_all["status_display"].dropna().unique().tolist()))
+    sel_carrier = f2.selectbox("Carrier", ["All"] + sorted(df_all["carrier"].dropna().unique().tolist()))
+    sel_state = f3.selectbox("State", ["All"] + sorted(df_all["state"].dropna().astype(str).unique().tolist()))
+    search = f4.text_input("Search by name", placeholder="First or last name…")
+
+    df = df_all.copy()
+    if sel_status != "All":
+        df = df[df["status_display"] == sel_status]
+    if sel_carrier != "All":
+        df = df[df["carrier"] == sel_carrier]
+    if sel_state != "All":
+        df = df[df["state"].astype(str) == sel_state]
+    if search.strip():
+        q = search.strip()
+        df = df[df["first_name"].fillna("").str.contains(q, case=False)
+                | df["last_name"].fillna("").str.contains(q, case=False)]
+
+    # ── Status breakdown for the filtered set ───────────────────────────────────
+    active_ct = int(df["status"].isin(active_sts).sum())
+    inactive_ct = int((~df["status"].isin(active_sts)).sum())
+    total_mem = int(pd.to_numeric(df.loc[df["status"].isin(active_sts), "applicant_count"],
+                                  errors="coerce").fillna(1).clip(lower=1).sum())
     _cards([
-        ui.stat_card("Active clients", f"{len(a):,}", "shield", ui.GREEN),
-        ui.stat_card("Members", f"{int(members):,}", "users", ui.ELEC),
-        ui.stat_card("Total on file", f"{len(roster):,}", "file", ui.BLUE),
+        ui.stat_card("Total Policies", f"{len(df):,}", "file", ui.ELEC),
+        ui.stat_card("Active Policies", f"{active_ct:,}", "shield", ui.GREEN),
+        ui.stat_card("Inactive Policies", f"{inactive_ct:,}", "minus", ui.RED),
+        ui.stat_card("Active Members", f"{total_mem:,}", "users", ui.CYAN),
     ])
-    st.divider()
-    _table(a, ["first_name", "last_name", "carrier", "state", "status", "effective_date"], "")
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # ── Household size breakdown (active policies in view) ───────────────────────
+    with st.container(border=True):
+        st.markdown(ui.chart_head("Household Size", "Active policies by number of members on the plan", "users"),
+                    unsafe_allow_html=True)
+        adf = df[df["status"].isin(active_sts)]
+        sz = pd.to_numeric(adf.get("applicant_count", pd.Series(dtype=float)),
+                           errors="coerce").fillna(1).astype(int).clip(lower=1)
+        if len(sz):
+            b = sz.where(sz < 6, 6)
+            lbl = {1: "1 (single)", 2: "2", 3: "3", 4: "4", 5: "5", 6: "6+"}
+            hh = (pd.DataFrame({"n": b, "mem": sz.values})
+                  .groupby("n").agg(Policies=("n", "size"), Members=("mem", "sum")).reset_index())
+            hh["Size"] = hh["n"].map(lbl)
+            hht = hh[["Size", "Policies", "Members"]].copy()
+            hht.loc[len(hht)] = ["Total", int(hht["Policies"].sum()), int(hht["Members"].sum())]
+            st.dataframe(hht, use_container_width=True, hide_index=True)
+        else:
+            st.caption("No active policies in the current view.")
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # ── Duplicate detection (only among policies still in force) ─────────────────
+    live = df_all[~df_all["status"].isin(["Terminated", "Cancelled"])]
+    dups = live[live.duplicated(subset=["first_name", "last_name"], keep=False)][
+        ["first_name", "last_name", "carrier", "state", "status", "effective_date"]].sort_values(
+        ["last_name", "first_name"])
+    if not dups.empty:
+        n_names = dups.groupby(["first_name", "last_name"]).ngroups
+        st.warning(f"⚠️ {len(dups)} duplicate client names detected "
+                   f"({n_names} unique names appear more than once)")
+        with st.expander("View duplicates"):
+            d2 = dups.copy()
+            d2.columns = [c.replace("_", " ").title() for c in d2.columns]
+            st.dataframe(d2, use_container_width=True, hide_index=True, column_config={
+                "Effective Date": st.column_config.DateColumn("Effective Date", format="MMM D, YYYY")})
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # ── Client roster table ─────────────────────────────────────────────────────
+    display_cols = ["first_name", "last_name", "carrier", "state", "status_display",
+                    "effective_date", "term_date", "months_on_book", "applicant_count", "net_premium"]
+    disp = df[[c for c in display_cols if c in df.columns]].rename(columns={"status_display": "status"})
+    disp.columns = [c.replace("_", " ").title() for c in disp.columns]
+    with st.container(border=True):
+        st.markdown(ui.chart_head("Client Roster", f"{len(df):,} policies in current view", "book"),
+                    unsafe_allow_html=True)
+        st.dataframe(disp, use_container_width=True, hide_index=True, height=600, column_config={
+            "Effective Date": st.column_config.DateColumn("Effective Date", format="MMM D, YYYY"),
+            "Term Date": st.column_config.DateColumn("Term Date", format="MMM D, YYYY"),
+            "Net Premium": st.column_config.NumberColumn("Net Premium", format="$%.2f"),
+            "Applicant Count": st.column_config.NumberColumn("Members"),
+            "Months On Book": st.column_config.NumberColumn("Mo. on Book"),
+        })
 
 
 def page_losses(tenant: dict, roster) -> None:

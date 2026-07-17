@@ -111,6 +111,42 @@ def daily_month_fig(daily_df: pd.DataFrame):
     return fig
 
 
+def members_over_time_fig(mom_plot):
+    """Cumulative active members by month — spline area chart."""
+    n = len(mom_plot)
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=mom_plot["Month Label"], y=mom_plot["Total Members"],
+        mode="lines+markers+text", text=mom_plot["Total Members"], textposition="top center",
+        textfont=dict(size=11, color="#e2e8f0"),
+        line=dict(color=ELEC, width=3, shape="spline"),
+        marker=dict(size=8, color=BLUE, line=dict(width=2, color="#dbeafe")),
+        fill="tozeroy", fillcolor="rgba(59,130,246,0.15)",
+        hovertemplate="%{x}: %{y} members<extra></extra>"))
+    fig.update_layout(**ui._chart_layout(
+        showlegend=False, height=360,
+        xaxis=dict(showgrid=False, zeroline=False, range=[-0.6, n - 0.2], automargin=True),
+        yaxis=dict(title="Members", gridcolor="rgba(96,165,250,0.10)", showgrid=True,
+                   zeroline=False, automargin=True),
+        margin=dict(t=24, b=30, l=10, r=70)))
+    return fig
+
+
+def new_vs_lost_fig(mom_plot, added_col, lost_col):
+    """Grouped Added (green) vs Lost (red) bars, month over month."""
+    f = go.Figure()
+    f.add_trace(go.Bar(x=mom_plot["Month Label"], y=mom_plot[added_col], name="Added", marker_color=GREEN))
+    f.add_trace(go.Bar(x=mom_plot["Month Label"], y=mom_plot[lost_col], name="Lost", marker_color=RED))
+    f.update_traces(marker_cornerradius=3, hovertemplate="%{x}: %{y}<extra></extra>")
+    f.update_layout(**ui._chart_layout(
+        barmode="group", bargap=0.3,
+        legend=dict(orientation="h", yanchor="bottom", y=1.03, x=0, bgcolor="rgba(0,0,0,0)", font=dict(size=12)),
+        height=360, margin=dict(t=34, b=44, l=10, r=10),
+        xaxis=dict(showgrid=False, zeroline=False, tickangle=-45, tickfont=dict(size=10), automargin=True),
+        yaxis=dict(gridcolor="rgba(96,165,250,0.10)", showgrid=True, zeroline=False, automargin=True)))
+    return f
+
+
 def goal_growth_figs(hist, pace_df, goal, goal_arr, today):
     """(members_fig, revenue_fig) — actual vs required-pace lines toward a goal."""
     today_iso = pd.Timestamp(today).isoformat()
