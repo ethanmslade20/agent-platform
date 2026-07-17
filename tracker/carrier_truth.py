@@ -267,7 +267,9 @@ def apply_oscar_truth(all_clients: pd.DataFrame,
     _save_dropped(dropped, (Path(carrier_books_dir) / "oscar_dropped.json"))
 
     # Add Oscar-active clients the tracker lacks
-    t_keys = set(ac.loc[is_osc, "_nm"]) | (set(ac.loc[is_osc, "_em"]) - {""}) | (set(ac.loc[is_osc, "_ph"]) - {""})
+    # Match against the whole book (any carrier), so a client already present
+    # under an aliased carrier name isn't re-added as a duplicate.
+    t_keys = set(ac["_nm"]) | (set(ac["_em"]) - {""}) | (set(ac["_ph"]) - {""})
     missing = o_active[o_active.apply(
         lambda r: not _match(r["nm"], r["em"], r["ph"], t_keys), axis=1)]
     new_rows = []
@@ -373,7 +375,8 @@ def apply_uhc_truth(all_clients: pd.DataFrame,
     _save_dropped(dropped, (Path(carrier_books_dir) / "uhc_dropped.json"))
 
     # Add UHC-active business missing from tracker, grouped into policies by App ID
-    t_keys = set(ac.loc[is_uhc, "_nm"]) | (set(ac.loc[is_uhc, "_ph"]) - {""})
+    # Match against the whole book (any carrier), not just UHC-named rows.
+    t_keys = set(ac["_nm"]) | (set(ac["_ph"]) - {""})
     miss = ua[ua.apply(lambda r: not _m(r["nm"], r["ph"], t_keys), axis=1)].copy()
     miss["grp"] = miss.apply(lambda r: r["aid"] if r["aid"] else f"solo_{r.name}", axis=1)
     new_rows = []
@@ -478,7 +481,11 @@ def apply_anthem_truth(all_clients: pd.DataFrame,
 
     _save_dropped(dropped, (Path(carrier_books_dir) / "anthem_dropped.json"))
 
-    t_keys = set(ac.loc[is_anth, "_k"])
+    # Only add a portal client if they're absent from the WHOLE book — not just
+    # rows whose carrier says "anthem". Anthem's Georgia plan is listed by
+    # HealthSherpa as "Blue Cross Blue Shield Healthcare Plan of Georgia", so
+    # scoping to is_anth would re-add those clients as duplicates.
+    t_keys = set(ac["_k"])
     miss = a_act[~a_act["key"].isin(t_keys)]
     new_rows = []
     for _, r in miss.iterrows():
