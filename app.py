@@ -761,9 +761,11 @@ def _commission_upload(agent_id: str) -> None:
     """Upload any commission statement → auto-map columns (saved per format) → canonical records."""
     recs = commissions_ingest.load_records(agent_id)
     with st.expander("➕  Add a commission statement", expanded=recs.empty):
-        st.caption("CSV or Excel, in whatever layout your carrier or upline sends. You map the "
-                   "columns once — we remember the format for next time.")
-        up = st.file_uploader("Commission statement (.csv / .xlsx)", type=["csv", "xlsx", "xls"],
+        st.caption("CSV, Excel, or PDF — whatever layout your carrier or upline sends. You map the "
+                   "columns once, and we remember the format for next time. (PDF tables are "
+                   "auto-extracted; just double-check the columns before saving.)")
+        up = st.file_uploader("Commission statement (.csv / .xlsx / .pdf)",
+                              type=["csv", "xlsx", "xls", "pdf"],
                               key="comm_up", label_visibility="collapsed")
         if up is None:
             return

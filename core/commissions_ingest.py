@@ -48,18 +48,112 @@ _HINTS = {
 
 _MONEY_RE = re.compile(r"[^0-9.\-]")
 
+# A row whose client cell is one of these is a statement total/footer, not a real
+# commission line — drop it so it doesn't double the sum (common in PDFs/exports).
+_SUMMARY_RE = re.compile(
+    r"^\s*(grand\s*total|sub\s*total|totals?|sum|balance|amount\s*due|"
+    r"total\s*(commission|paid|due|amount))\s*:?\s*$", re.I)
+
 
 def _norm(s) -> str:
     return re.sub(r"\s+", " ", str(s).strip().lower())
 
 
 def read_table(data: bytes, filename: str) -> pd.DataFrame:
-    """Read a commission file (CSV or Excel) into a DataFrame of raw columns."""
+    """Read a commission file (CSV, Excel, or PDF) into a DataFrame of raw columns.
+
+    PDFs are best-effort table extraction — the mapping step lets the agent fix any
+    columns that came out shifted, which is the whole point of the wizard.
+    """
     name = (filename or "").lower()
     if name.endswith((".xlsx", ".xls")):
         return pd.read_excel(io.BytesIO(data))
+    if name.endswith(".pdf"):
+        return read_pdf(data)
     # CSV: tolerate junk preamble rows by letting pandas sniff; keep everything as-is.
     return pd.read_csv(io.BytesIO(data), dtype=str, keep_default_na=False)
+
+
+def _clean_cell(c) -> str:
+    return re.sub(r"\s+", " ", str(c if c is not None else "").replace("\n", " ")).strip()
+
+
+def _dedupe_headers(cells: list) -> list:
+    out, seen = [], {}
+    for i, c in enumerate(cells):
+        name = _clean_cell(c) or f"Column {i + 1}"
+        if name in seen:
+            seen[name] += 1
+            name = f"{name} ({seen[name]})"
+        else:
+            seen[name] = 0
+        out.append(name)
+    return out
+
+
+def _header_is_data(cells: list) -> bool:
+    """True when the 'header' row is really data (few word-like cells) — e.g. a PDF
+    table whose column titles didn't extract, so row 1 is the first record."""
+    wordy = sum(1 for c in cells if re.search(r"[A-Za-z]{3,}", str(c)))
+    return wordy < max(2, len(cells) // 2)
+
+
+def _frame_from_rows(rows: list) -> pd.DataFrame:
+    """Build a DataFrame from extracted rows, inferring whether row 0 is a header."""
+    rows = [r for r in rows if any(_clean_cell(c) for c in r)]
+    if not rows:
+        return pd.DataFrame()
+    head = [_clean_cell(c) for c in rows[0]]
+    if _header_is_data(head):
+        cols = [f"Column {i + 1}" for i in range(len(head))]
+        body = rows
+    else:
+        cols = _dedupe_headers(head)
+        body = rows[1:]
+    body = [r for r in body if [_clean_cell(c) for c in r] != head]  # drop repeated headers
+    body = [(list(r) + [""] * len(cols))[:len(cols)] for r in body]   # pad/trim ragged rows
+    return pd.DataFrame([[_clean_cell(c) for c in r] for r in body], columns=cols)
+
+
+def read_pdf(data: bytes) -> pd.DataFrame:
+    """Extract a commission table from a PDF. Tries ruled/unruled tables first
+    (concatenating the same table shape across pages), then a text-line fallback."""
+    try:
+        import pdfplumber
+    except Exception as e:
+        raise ValueError(f"PDF support isn't available on this server ({e}). "
+                         "Export your statement as CSV or Excel instead.")
+    from collections import Counter
+
+    tables = []
+    text_lines = []
+    with pdfplumber.open(io.BytesIO(data)) as pdf:
+        for page in pdf.pages:
+            for tbl in (page.extract_tables() or []):
+                if tbl and len(tbl) >= 1 and len(tbl[0]) >= 2:
+                    tables.append(tbl)
+            txt = page.extract_text() or ""
+            text_lines += [ln for ln in txt.split("\n") if ln.strip()]
+
+    if tables:
+        widths = Counter(len(t[0]) for t in tables)
+        best_w = widths.most_common(1)[0][0]
+        rows = [row for t in tables if len(t[0]) == best_w for row in t]
+        df = _frame_from_rows(rows)
+        if not df.empty:
+            return df
+
+    # Fallback: reconstruct a table from text lines split on runs of 2+ spaces.
+    split = [re.split(r"\s{2,}", ln.strip()) for ln in text_lines]
+    cnt = Counter(len(r) for r in split if len(r) >= 2)
+    if cnt:
+        w = cnt.most_common(1)[0][0]
+        rows = [r for r in split if len(r) == w]
+        if len(rows) >= 2:
+            return _frame_from_rows(rows)
+
+    raise ValueError("Couldn't find a table in that PDF. If it's a scanned image, "
+                     "export the statement as CSV/Excel instead.")
 
 
 def header_sig(df: pd.DataFrame) -> str:
@@ -147,8 +241,11 @@ def parse(df: pd.DataFrame, mapping: dict, source_file: str) -> pd.DataFrame:
     out["policy_id"] = df[pid_col].astype(str).str.strip() if (pid_col and pid_col in df.columns) else ""
 
     out["source_file"] = source_file
-    # Drop $0 rows — statement subtotals/footers/blank lines. Negative amounts
-    # (chargebacks) are real money movement and are kept.
+    # Drop statement total/footer lines (client cell is "Total", "Grand Total", …)
+    # so they don't double the sum.
+    out = out[~out["client"].astype(str).str.match(_SUMMARY_RE)]
+    # Drop $0 rows — footers/blank lines. Negative amounts (chargebacks) are real
+    # money movement and are kept.
     out = out[out["amount"] != 0].reset_index(drop=True)
     return out
 
