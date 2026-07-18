@@ -336,11 +336,28 @@ def save_records(agent_id: str, new_records: pd.DataFrame, mapping: dict, sig: s
     (so re-uploading a corrected statement doesn't double-count). Saves the
     column mapping under the file's header signature for next time. Returns the
     running total row count."""
+    import hashlib
     paths.ensure_dirs(agent_id)
-    existing = load_records(agent_id)
     src = new_records["source_file"].iloc[0] if len(new_records) else ""
-    if not existing.empty and "source_file" in existing.columns:
-        existing = existing[existing["source_file"] != src]
+    # Content signature so the SAME statement re-downloaded under a "(1)" filename
+    # can't double-count — dedup on content as well as on filename.
+    if len(new_records):
+        key_cols = [c for c in ["client", "carrier", "period", "amount", "policy_id"]
+                    if c in new_records.columns]
+        bid = hashlib.md5(pd.util.hash_pandas_object(
+            new_records[key_cols], index=False).values.tobytes()).hexdigest()[:12]
+    else:
+        bid = ""
+    new_records = new_records.copy()
+    new_records["batch_id"] = bid
+
+    existing = load_records(agent_id)
+    if not existing.empty:
+        if "source_file" not in existing.columns:
+            existing["source_file"] = ""
+        if "batch_id" not in existing.columns:
+            existing["batch_id"] = ""
+        existing = existing[(existing["source_file"] != src) & (existing["batch_id"] != bid)]
     combined = pd.concat([existing, new_records], ignore_index=True)
 
     rp = _records_path(agent_id)
