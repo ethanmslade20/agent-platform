@@ -78,6 +78,19 @@ def _months_on_book(eff, today) -> float:
     return round(max((today - eff).days, 0) / 30.44, 1)
 
 
+def _ffm_mask(ac: pd.DataFrame) -> pd.Series:
+    """Rows carrier-truth is allowed to reconcile.
+
+    State-based-marketplace clients (source == "access": Get Covered IL, GA
+    Access, etc.) enroll OFF the FFM broker portal, so they never appear in the
+    carrier's FFM export — reconciling them would wrongly cancel every one.
+    Exclude them; everything else (FFM/HealthSherpa, legacy untagged) is fair game.
+    """
+    if "source" in ac.columns:
+        return ac["source"].astype(str).str.lower() != "access"
+    return pd.Series(True, index=ac.index)
+
+
 def apply_ambetter_truth(all_clients: pd.DataFrame,
                          carrier_books_dir: str = _DEFAULT_BOOKS,
                          today=None):
@@ -113,12 +126,13 @@ def apply_ambetter_truth(all_clients: pd.DataFrame,
     ac["_eff"] = pd.to_datetime(ac.get("effective_date"), errors="coerce")
     is_amb = ac["carrier"].astype(str).str.contains("ambetter", case=False, na=False)
     is_active = ac["status"].isin(_ACTIVE)
+    is_ffm = _ffm_mask(ac)
 
     dropped = _load_dropped((Path(carrier_books_dir) / "ambetter_dropped.json"))
     today_iso = today.strftime("%Y-%m-%d")
 
     n_cancel_termed = n_cancel_dropped = n_protected = 0
-    for idx in ac.index[is_amb & is_active]:
+    for idx in ac.index[is_amb & is_active & is_ffm]:
         sid, nm = ac.at[idx, "_sid"], ac.at[idx, "_nm"]
         if (sid and sid in aa_sid) or nm in aa_nm:
             continue  # confirmed active in portal
@@ -234,6 +248,7 @@ def apply_oscar_truth(all_clients: pd.DataFrame,
     ac["_eff"] = pd.to_datetime(ac.get("effective_date"), errors="coerce")
     is_osc = ac["carrier"].astype(str).str.contains("oscar", case=False, na=False)
     is_active = ac["status"].isin(_ACTIVE)
+    is_ffm = _ffm_mask(ac)
 
     def _match(nm, em, ph, S):
         return bool(nm in S or (em in S if em else False) or (ph in S if ph else False))
@@ -242,7 +257,7 @@ def apply_oscar_truth(all_clients: pd.DataFrame,
     today_iso = today.strftime("%Y-%m-%d")
     n_cancel_inactive = n_cancel_dropped = n_protected = 0
 
-    for idx in ac.index[is_osc & is_active]:
+    for idx in ac.index[is_osc & is_active & is_ffm]:
         nm, em, ph = ac.at[idx, "_nm"], ac.at[idx, "_em"], ac.at[idx, "_ph"]
         if _match(nm, em, ph, aa):
             continue  # active in Oscar portal
@@ -340,6 +355,7 @@ def apply_uhc_truth(all_clients: pd.DataFrame,
     ac["_eff"] = pd.to_datetime(ac.get("effective_date"), errors="coerce")
     is_uhc = ac["carrier"].astype(str).str.contains("united", case=False, na=False)
     is_active = ac["status"].isin(_ACTIVE)
+    is_ffm = _ffm_mask(ac)
 
     def _m(nm, ph, S):
         return bool(nm in S or (ph in S if ph else False))
@@ -348,7 +364,7 @@ def apply_uhc_truth(all_clients: pd.DataFrame,
     today_iso = today.strftime("%Y-%m-%d")
     n_lapsed = n_dropped = n_protected = 0
 
-    for idx in ac.index[is_uhc & is_active]:
+    for idx in ac.index[is_uhc & is_active & is_ffm]:
         nm, ph = ac.at[idx, "_nm"], ac.at[idx, "_ph"]
         if _m(nm, ph, A):
             continue  # active in UHC
@@ -452,12 +468,13 @@ def apply_anthem_truth(all_clients: pd.DataFrame,
     ac["_eff"] = pd.to_datetime(ac.get("effective_date"), errors="coerce")
     is_anth = ac["carrier"].astype(str).str.contains("anthem|wellpoint", case=False, na=False, regex=True)
     is_active = ac["status"].isin(_ACTIVE)
+    is_ffm = _ffm_mask(ac)
 
     dropped = _load_dropped((Path(carrier_books_dir) / "anthem_dropped.json"))
     today_iso = today.strftime("%Y-%m-%d")
     n_lapsed = n_dropped = n_protected = 0
 
-    for idx in ac.index[is_anth & is_active]:
+    for idx in ac.index[is_anth & is_active & is_ffm]:
         k = ac.at[idx, "_k"]
         if k in A:
             continue
