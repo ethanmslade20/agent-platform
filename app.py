@@ -259,6 +259,32 @@ def page_upload(tenant: dict) -> None:
             st.error(f"Couldn't read that file: {e}")
 
     st.divider()
+    st.subheader("State marketplaces  ·  optional")
+    st.caption("Some states run their own exchange instead of HealthSherpa (Get Covered IL, "
+               "Georgia Access, Virginia). Add those clients here — enrolled ones merge into "
+               "your book (shopping leads are skipped, and anyone already in HealthSherpa isn't "
+               "double-counted).")
+    scols = st.columns(3)
+    for i, (skey, sspec) in enumerate(ingest_service.state_sources().items()):
+        with scols[i % 3]:
+            sup = st.file_uploader(f"{sspec['label']} (.csv)", type=["csv"], key=f"se_{skey}")
+            _last_up(ups, f"state_{skey}")
+            if sup is not None and st.button("Add these clients", key=f"se_btn_{skey}",
+                                             type="primary", use_container_width=True):
+                try:
+                    with st.spinner("Reading and merging…"):
+                        _snap, sdf = ingest_service.ingest_state_exchange(agent_id, sup.getvalue(), skey)
+                        roster = ingest_service.build_book(agent_id, tenant.get("npn", ""), tenant.get("name", ""))
+                        if roster is not None:
+                            updates.compute_and_log(agent_id, roster)
+                    st.success(f"Added — {len(sdf):,} enrolled clients merged. Your update summary "
+                               f"is on the **Book Updates** page.")
+                    st.session_state["_pending_nav"] = "Book Updates"
+                    st.rerun()
+                except (Exception, SystemExit) as e:
+                    st.error(f"Couldn't read that file: {e}")
+
+    st.divider()
     st.subheader("Carrier books  ·  optional")
     st.caption("Add these to unlock the payment & dispute checks. Stored privately in your workspace.")
     cols = st.columns(2)

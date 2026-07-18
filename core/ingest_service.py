@@ -109,6 +109,64 @@ def ingest_healthsherpa(agent_id: str, data: bytes, npn: str = "", name: str = "
     return snap, df
 
 
+# State-based marketplaces (agents in these states enroll off their own exchange, not
+# HealthSherpa). Same "book_of_business" export format for all three; the state is read
+# from each row's address, so the key here just names the file so states don't collide.
+_STATE_SOURCES = {
+    "il": {"label": "Illinois — Get Covered IL"},
+    "ga": {"label": "Georgia — Georgia Access"},
+    "va": {"label": "Virginia — Virginia's Insurance Marketplace"},
+}
+
+
+def state_sources() -> dict:
+    return _STATE_SOURCES
+
+
+def ingest_state_exchange(agent_id: str, data: bytes, state_key: str, month=None) -> tuple:
+    """Ingest a state-based-marketplace export (Get Covered IL / GA Access / Virginia).
+    All use the same book_of_business format; enrolled clients are kept (shopping
+    leads dropped), deduped against HealthSherpa. Turns on any brand-new state the
+    file brings in so its clients aren't hidden by the appointment filter."""
+    if state_key not in _STATE_SOURCES:
+        raise ValueError(f"unknown state source '{state_key}'")
+    paths.ensure_dirs(agent_id)
+    dest = paths.input_dir(agent_id) / f"book_of_business_{state_key}.csv"
+    dest.write_bytes(data)
+    source_configs = load_carrier_configs(_CARRIER_CFG)
+    # full_config omitted → no licensing-matrix drop; keep all of the agent's clients.
+    snap, df = ingest_file(dest, source_configs, paths.snapshots_dir(agent_id), month=month)
+    if store.using_db() and snap:
+        store.put_file(agent_id, f"snapshots/{Path(snap).name}", Path(snap).read_bytes())
+    _seed_new_states(agent_id, df)
+    _record_upload(agent_id, f"state_{state_key}")
+    return snap, df
+
+
+def _seed_new_states(agent_id: str, df) -> None:
+    """Turn on the states + carriers this state-exchange file brings in, so its
+    clients aren't hidden by the appointment filter. Only ADDS (unions in the file's
+    states/brands) — it never removes, so anything the agent deliberately toggled off
+    elsewhere is untouched. Uploading a state's file implies you write there."""
+    from core import settings, carrier_names
+    if df is None or df.empty or not {"state", "carrier"}.issubset(df.columns):
+        return
+    cfg = settings.get(agent_id)
+    appts = dict(cfg.get("appointments") or {})
+    changed = False
+    for st, sub in df.groupby(df["state"].astype(str).str.upper().str.strip()):
+        st = str(st).strip()
+        if not st or st == "NAN":
+            continue
+        brands = {carrier_names.brand_of(c) for c in sub["carrier"].dropna() if carrier_names.brand_of(c)}
+        merged = sorted(set(appts.get(st) or []) | brands)
+        if merged != sorted(appts.get(st) or []):
+            appts[st] = merged
+            changed = True
+    if changed:
+        settings.save(agent_id, {**cfg, "appointments": appts, "appointments_initialized": True})
+
+
 def save_carrier(agent_id: str, carrier: str, data: bytes) -> Path:
     """Store a carrier export in the tenant's carrier_books/ under its canonical name.
     Ambetter is unzipped to its inner CSV. Returns the saved path."""

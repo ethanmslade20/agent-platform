@@ -129,6 +129,9 @@ sources:
       - "il_access*"
       - "ga_access*"
       - "*_access*"
+      - "book_of_business*"   # Get Covered IL / GA Access / VA — state-based marketplaces
+      - "getcovered*"
+      - "get_covered*"
 
     # The CSV header is offset by one column; ingest reads with header=None + true_columns.
     true_columns:
