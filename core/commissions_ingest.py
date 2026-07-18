@@ -59,23 +59,68 @@ def _norm(s) -> str:
     return re.sub(r"\s+", " ", str(s).strip().lower())
 
 
+# Column-label words that mark a header row — lets us skip a statement's title
+# block (agent name, "Commission Statement", totals) and find the real header.
+_HEADER_WORDS = {
+    "agent", "npn", "carrier", "issuer", "company", "insurer", "policy", "member",
+    "insured", "subscriber", "client", "name", "commission", "amount", "paid",
+    "payment", "premium", "effective", "pay", "period", "date", "state", "product",
+    "plan", "description", "subscribers", "id", "metal", "county", "enroll",
+}
+
+
 def read_table(data: bytes, filename: str) -> pd.DataFrame:
     """Read a commission file (CSV, Excel, or PDF) into a DataFrame of raw columns.
 
+    Handles a leading title/preamble block by auto-finding the real header row
+    (FMO statements start with agent name, "Commission Statement", totals, etc.).
     PDFs are best-effort table extraction — the mapping step lets the agent fix any
     columns that came out shifted, which is the whole point of the wizard.
     """
     name = (filename or "").lower()
-    if name.endswith((".xlsx", ".xls")):
-        return pd.read_excel(io.BytesIO(data))
     if name.endswith(".pdf"):
         return read_pdf(data)
-    # CSV: tolerate junk preamble rows by letting pandas sniff; keep everything as-is.
-    return pd.read_csv(io.BytesIO(data), dtype=str, keep_default_na=False)
+    if name.endswith((".xlsx", ".xls")):
+        raw = pd.read_excel(io.BytesIO(data), header=None, dtype=str)
+    else:
+        raw = pd.read_csv(io.BytesIO(data), header=None, dtype=str)
+    return _locate_and_frame(raw)
+
+
+def _find_header_row(raw: pd.DataFrame) -> int:
+    """Index of the row that looks most like the column header (most cells that
+    are known column-label words). Falls back to the first row."""
+    best_i, best_score = 0, 0
+    for i in range(min(len(raw), 25)):
+        cells = [_clean_cell(c).lower() for c in raw.iloc[i].tolist()]
+        nonempty = [c for c in cells if c]
+        if len(nonempty) < 2:
+            continue
+        score = sum(1 for c in nonempty
+                    if any(re.search(rf"\b{w}\b", c) for w in _HEADER_WORDS))
+        if score > best_score:
+            best_score, best_i = score, i
+    return best_i
+
+
+def _locate_and_frame(raw: pd.DataFrame) -> pd.DataFrame:
+    """Turn a header-less raw read into a clean DataFrame: drop blank rows, find
+    the header row, use it as columns, and clean every cell."""
+    raw = raw.dropna(how="all").reset_index(drop=True)
+    if raw.empty:
+        return pd.DataFrame()
+    h = _find_header_row(raw)
+    header = _dedupe_headers(list(raw.iloc[h]))
+    body = raw.iloc[h + 1:].reset_index(drop=True)
+    body.columns = header
+    body = body.map(_clean_cell)
+    body = body[body.apply(lambda r: any(v for v in r), axis=1)].reset_index(drop=True)
+    return body
 
 
 def _clean_cell(c) -> str:
-    return re.sub(r"\s+", " ", str(c if c is not None else "").replace("\n", " ")).strip()
+    s = re.sub(r"\s+", " ", str(c if c is not None else "").replace("\n", " ")).strip()
+    return "" if s.lower() in ("nan", "none", "nat") else s
 
 
 def _dedupe_headers(cells: list) -> list:
