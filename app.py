@@ -849,6 +849,50 @@ def page_commissions(tenant: dict, roster) -> None:
         st.caption("Money Received comes straight from your uploaded statements. "
                    "Re-uploading the same file replaces its rows (no double-counting).")
 
+    # ── Commission gaps (reconcile paid records against the book) ────────────────
+    if not recs.empty:
+        st.markdown("<br>", unsafe_allow_html=True)
+        st.divider()
+        _hdr("Commission Gaps", "shield")
+        if roster is None:
+            st.info("Upload your HealthSherpa book on the **Upload** page to cross-check who "
+                    "you're actually being paid on.")
+        else:
+            rec = commissions_ingest.reconcile(roster, recs)
+            if not rec["reconcilable"]:
+                st.info("These statements don't include client names or policy IDs, so per-client "
+                        "gap-checking isn't possible yet. Re-add a statement and map a **Client** or "
+                        "**Policy / member ID** column to unlock this.")
+            else:
+                full = rec["active"] > 0 and rec["paid"] == rec["active"]
+                _cards([
+                    ui.metric_card("Paid Coverage", f"{rec['paid']}/{rec['active']}",
+                                   sub="active clients you're paid on", icon_key="users",
+                                   highlight="green" if full else False),
+                    ui.metric_card("Gaps to Chase", f"{len(rec['gaps']):,}",
+                                   sub="active but unpaid or stopped", icon_key="minus",
+                                   highlight="gold" if len(rec["gaps"]) else "green"),
+                    ui.metric_card("$/mo At Risk", f"${rec['monthly_gap']:,.0f}",
+                                   sub="commission you may be owed", icon_key="dollar",
+                                   highlight="red" if rec["monthly_gap"] else False),
+                ])
+                if rec["gaps"].empty:
+                    st.success("Every active client has a matching commission — no gaps found. 🎉")
+                else:
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    with st.container(border=True):
+                        st.markdown(ui.chart_head("Active clients you're not getting paid on",
+                            "“Never paid” = no matching commission on record. “Stopped” = paid "
+                            "before, nothing in the last 2 statement months (likely a dispute to file).", "minus"),
+                            unsafe_allow_html=True)
+                        gdf = rec["gaps"].copy()
+                        gdf["Est $/mo"] = gdf["Est $/mo"].map(lambda v: f"${v:,.0f}")
+                        st.dataframe(gdf, use_container_width=True, hide_index=True,
+                                     height=min(46 + 35 * (len(gdf) + 1), 600))
+                    if rec["unmatched"]:
+                        st.caption(f"↳ {rec['unmatched']} payment name(s) didn't match an active client — "
+                                   "usually churned clients or a name spelled differently on the statement.")
+
     st.markdown("<br>", unsafe_allow_html=True)
     st.divider()
 

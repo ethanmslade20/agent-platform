@@ -242,3 +242,114 @@ def summary(records: pd.DataFrame) -> dict:
 
     return {"total": total, "this_month": this_month,
             "by_carrier": by_carrier, "by_month": by_month}
+
+
+# ── reconciliation: who in the book am I actually getting paid on? ───────────────
+def _nk(first, last) -> str:
+    return re.sub(r"[^a-z]", "", f"{first}{last}".lower())
+
+
+def _nk_str(name) -> str:
+    """Name key from a free-form statement name — handles 'Last, First', 'First Last',
+    and drops a trailing 'Family'/'Household'."""
+    s = str(name).strip()
+    s = re.sub(r"\b(family|household)\b", "", s, flags=re.I).strip()
+    if "," in s:
+        last, first = s.split(",", 1)
+        fp = first.strip().split()
+        return _nk(fp[0] if fp else "", last.strip())
+    parts = s.split()
+    if len(parts) >= 2:
+        return _nk(parts[0], parts[-1])
+    return re.sub(r"[^a-z]", "", s.lower())
+
+
+def _idk(x) -> str:
+    v = re.sub(r"[^0-9a-z]", "", str(x).lower())
+    return v if len(v) >= 4 else ""     # ignore trivially-short ids
+
+
+def _mdiff(a: str, b: str) -> int:
+    try:
+        return (int(a[:4]) - int(b[:4])) * 12 + (int(a[5:7]) - int(b[5:7]))
+    except Exception:
+        return 0
+
+
+def reconcile(roster, records, pmpm: int = 23) -> dict:
+    """Cross-check the active book against paid-commission records.
+
+    Match a client to a payment by policy/member ID (strong) or full name (handles
+    'Last, First'). A client is a GAP if active in the book but either never paid
+    or paid before with nothing in the last 2 statement months ("Stopped" — the
+    dispute signal). Matching is deliberately strict: a false gap is a quick verify,
+    but a false "paid" would HIDE money you're owed.
+
+    Returns {reconcilable, active, paid, gaps(df), monthly_gap, unmatched}.
+    Not reconcilable when statements carry no client name or ID (lump sums).
+    """
+    out = {"reconcilable": False, "active": 0, "paid": 0,
+           "gaps": pd.DataFrame(), "monthly_gap": 0.0, "unmatched": 0}
+    if roster is None or records is None or records.empty:
+        return out
+    from core import views
+    active = views.active(roster)
+    if active is None or active.empty:
+        return out
+    usable = records[(records["client"].astype(str).str.strip() != "")
+                     | (records["policy_id"].astype(str).str.strip() != "")]
+    if usable.empty:
+        return out           # carrier-level lump sums → no per-client reconciliation
+
+    out["reconcilable"], out["active"] = True, len(active)
+
+    paid_name, paid_id = {}, {}
+    for _, r in usable.iterrows():
+        per = str(r.get("period", ""))
+        per = "" if per == "Unknown" else per
+        nk = _nk_str(r.get("client", "")) if str(r.get("client", "")).strip() else ""
+        if nk:
+            paid_name[nk] = max(paid_name.get(nk, ""), per)
+        idk = _idk(r.get("policy_id", ""))
+        if idk:
+            paid_id[idk] = max(paid_id.get(idk, ""), per)
+
+    months = [p for p in usable["period"].tolist() if p != "Unknown"]
+    latest = max(months) if months else ""
+
+    rows, paid_current, matched_names = [], 0, set()
+    for _, c in active.iterrows():
+        nk = _nk(c.get("first_name", ""), c.get("last_name", ""))
+        ids = [i for i in (_idk(c.get("ffm_subscriber_id", "")), _idk(c.get("policy_number", ""))) if i]
+        last_paid, hit = "", False
+        if nk and nk in paid_name:
+            hit = True; last_paid = max(last_paid, paid_name[nk]); matched_names.add(nk)
+        for i in ids:
+            if i in paid_id:
+                hit = True; last_paid = max(last_paid, paid_id[i])
+        mem = pd.to_numeric(c.get("applicant_count"), errors="coerce")
+        mem = 1 if pd.isna(mem) else max(int(mem), 1)
+
+        if not hit:
+            status = "Never paid"
+        elif latest and last_paid and _mdiff(latest, last_paid) >= 2:
+            status = "Stopped"
+        else:
+            paid_current += 1
+            continue
+        rows.append({
+            "Client": f"{c.get('first_name','')} {c.get('last_name','')}".strip(),
+            "Carrier": c.get("carrier", ""), "State": str(c.get("state", "") or ""),
+            "Members": mem, "Est $/mo": mem * pmpm, "Status": status,
+            "Last Paid": last_paid or "—", "Phone": str(c.get("phone", "") or ""),
+        })
+
+    g = pd.DataFrame(rows)
+    if not g.empty:
+        # Never paid first, then biggest dollars — chase the largest fresh gaps first.
+        g = g.sort_values(["Status", "Est $/mo"], ascending=[True, False]).reset_index(drop=True)
+    out["paid"] = paid_current
+    out["gaps"] = g
+    out["monthly_gap"] = float(g["Est $/mo"].sum()) if not g.empty else 0.0
+    out["unmatched"] = int(sum(1 for k in paid_name if k not in matched_names))
+    return out
