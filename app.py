@@ -11,8 +11,8 @@ import os
 import pandas as pd
 import streamlit as st
 
-from core import (aor_track, carrier_names, charts, daily, dashboard_kpis, ingest_service,
-                  paths, settings, tenants, ui, updates, views)
+from core import (aor_track, carrier_names, charts, commissions_ingest, daily, dashboard_kpis,
+                  ingest_service, paths, settings, tenants, ui, updates, views)
 
 # The product name your agents see. Placeholder — change it here anytime.
 APP_NAME = "Agent Book"
@@ -757,14 +757,106 @@ def page_client_lookup(tenant: dict, roster) -> None:
                      })
 
 
+def _commission_upload(agent_id: str) -> None:
+    """Upload any commission statement → auto-map columns (saved per format) → canonical records."""
+    recs = commissions_ingest.load_records(agent_id)
+    with st.expander("➕  Add a commission statement", expanded=recs.empty):
+        st.caption("CSV or Excel, in whatever layout your carrier or upline sends. You map the "
+                   "columns once — we remember the format for next time.")
+        up = st.file_uploader("Commission statement (.csv / .xlsx)", type=["csv", "xlsx", "xls"],
+                              key="comm_up", label_visibility="collapsed")
+        if up is None:
+            return
+        try:
+            df = commissions_ingest.read_table(up.getvalue(), up.name)
+        except Exception as e:
+            st.error(f"Couldn't read that file: {e}")
+            return
+        if df.empty:
+            st.warning("That file has no rows.")
+            return
+
+        sig = commissions_ingest.header_sig(df)
+        saved = commissions_ingest.saved_maps(agent_id).get(sig)
+        mapping0 = saved or commissions_ingest.detect(df)
+        st.caption("Using your saved column setup for this format ✓" if saved
+                   else "We auto-detected your columns — check them and fix any that are off.")
+        st.dataframe(df.head(5), use_container_width=True, hide_index=True)
+
+        opts = ["(none)"] + [str(c) for c in df.columns]
+        chosen, mcols = {}, st.columns(len(commissions_ingest.CANON))
+        for (key, label, req), col in zip(commissions_ingest.CANON, mcols):
+            default = mapping0.get(key)
+            idx = opts.index(default) if default in opts else 0
+            sel = col.selectbox(label + (" *" if req else ""), opts, index=idx, key=f"cm_{key}")
+            chosen[key] = None if sel == "(none)" else sel
+
+        if st.button("Save & add", type="primary"):
+            try:
+                new = commissions_ingest.parse(df, chosen, up.name)
+                if new.empty:
+                    st.warning("No commission rows found with that mapping — double-check the amount column.")
+                    return
+                total = commissions_ingest.save_records(agent_id, new, chosen, sig)
+                st.success(f"Added {len(new):,} records from {up.name}. {total:,} on file now.")
+                st.rerun()
+            except Exception as e:
+                st.error(str(e))
+
+
 def page_commissions(tenant: dict, roster) -> None:
+    agent_id = tenant["agent_id"]
     st.title("Commissions")
-    st.caption("Projected commission from your active book (members × $23/mo), plus what that "
-               "book is worth over its lifetime. Actual paid-commission tracking needs a payments "
-               "feed — that comes later.")
+    st.caption("Track commission you've actually been paid — upload any statement format — and see "
+               "what your active book projects to earn on top.")
     st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
+
+    # ── Money received (actual, from uploaded statements) ───────────────────────
+    _hdr("Money Received", "dollar")
+    _commission_upload(agent_id)
+    recs = commissions_ingest.load_records(agent_id)
+    if recs.empty:
+        st.info("No commission statements yet — add one above to see money received.")
+    else:
+        s = commissions_ingest.summary(recs)
+        _cards([
+            ui.metric_card("Total Received", f"${s['total']:,.0f}", sub=f"{len(recs):,} line items",
+                           icon_key="dollar", highlight="green"),
+            ui.metric_card("Latest Month", f"${s['this_month']:,.0f}",
+                           sub=(s["by_month"]["Month"].max() if not s["by_month"].empty else "add a date column"),
+                           icon_key="calendar"),
+            ui.metric_card("Carriers Paying", f"{s['by_carrier'].shape[0]}", sub="distinct carriers", icon_key="pie"),
+        ])
+        st.markdown("<br>", unsafe_allow_html=True)
+        c1, c2 = st.columns(2)
+        with c1:
+            with st.container(border=True):
+                st.markdown(ui.chart_head("Paid by Carrier", "Actual commission received per carrier", "pie"),
+                            unsafe_allow_html=True)
+                bc = s["by_carrier"].copy()
+                bc["Paid"] = bc["Paid"].map(lambda v: f"${v:,.0f}")
+                st.dataframe(bc, use_container_width=True, hide_index=True,
+                             height=min(46 + 35 * (len(bc) + 1), 420))
+        with c2:
+            with st.container(border=True):
+                st.markdown(ui.chart_head("Paid by Month", "Commission received over time", "trend"),
+                            unsafe_allow_html=True)
+                bm = s["by_month"]
+                if bm.empty:
+                    st.caption("Map a payment-date column to see the monthly trend.")
+                else:
+                    st.bar_chart(bm.set_index("Month")["Paid"], color="#22c55e", height=300)
+        st.caption("Money Received comes straight from your uploaded statements. "
+                   "Re-uploading the same file replaces its rows (no double-counting).")
+
+    st.markdown("<br>", unsafe_allow_html=True)
+    st.divider()
+
+    # ── Projected from the active book (members × $23/mo) ────────────────────────
+    _hdr("Projected from Your Book", "trend")
     if roster is None:
-        _need_book(); return
+        st.info("Upload your HealthSherpa export on the **Upload** page to see projected commission.")
+        return
     d = dashboard_kpis.compute(tenant["agent_id"], roster)
     PMPM, MAX_TENURE = 23, 60
     members = int(d["members"])
