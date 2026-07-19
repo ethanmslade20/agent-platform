@@ -216,13 +216,77 @@ def _last_up(ups: dict, key: str) -> None:
         st.caption("—  not uploaded yet")
 
 
+# ── Upload page look (hero icon, section pills, file cards) ──────────────────────
+_CLOUD_SVG = ('<svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="#ffffff" '
+              'stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">'
+              '<path d="M16 16l-4-4-4 4"/><path d="M12 12v9"/>'
+              '<path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/></svg>')
+
+# Carrier accent colors for the file icon on each carrier card.
+_CARRIER_ICON = {"ambetter": "#a78bfa", "oscar": "#22c55e", "anthem": "#3b82f6", "uhc": "#ec4899"}
+
+
+def _file_icon(color: str) -> str:
+    return (f'<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="{color}" '
+            f'stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">'
+            f'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>'
+            f'<polyline points="14 2 14 8 20 8"/></svg>')
+
+
+def _up_section(title: str, tail: str, pill: str, pill_cls: str, sub: str) -> str:
+    return (f'<div class="up-sec"><span class="up-sec-t">{title}</span>'
+            f'<span class="up-sec-tail"> • {tail}</span>'
+            f'<span class="up-pill {pill_cls}">{pill}</span></div>'
+            f'<div class="up-sec-sub">{sub}</div>')
+
+
+def _up_status(ups: dict, key: str) -> None:
+    if ups.get(key):
+        st.markdown(f'<div class="up-status ok">✓ Last updated {_ago(ups[key])}</div>',
+                    unsafe_allow_html=True)
+    else:
+        st.markdown('<div class="up-status">— not uploaded yet</div>', unsafe_allow_html=True)
+
+
+_UPLOAD_CSS = """
+<style>
+  .up-hero{display:flex;align-items:center;gap:16px;margin:2px 0 20px;}
+  .up-hero-ic{width:58px;height:58px;border-radius:16px;display:flex;align-items:center;
+    justify-content:center;flex:0 0 auto;background:linear-gradient(135deg,#3b82f6,#7c3aed);
+    box-shadow:0 8px 26px rgba(124,58,237,.38);}
+  .up-hero-title{font-size:2rem;font-weight:800;color:#f8fafc;line-height:1.05;letter-spacing:-.01em;}
+  .up-hero-sub{font-size:.9rem;color:#8aacd6;margin-top:4px;max-width:640px;}
+  .up-sec{display:flex;align-items:center;gap:2px;margin:26px 0 2px;}
+  .up-sec-t{font-size:1.32rem;font-weight:800;color:#f2f5fb;}
+  .up-sec-tail{font-size:1.32rem;font-weight:400;color:#5f7aa3;}
+  .up-pill{font-size:.6rem;font-weight:800;letter-spacing:.09em;padding:3px 9px;border-radius:999px;margin-left:10px;}
+  .up-pill.req{background:rgba(59,130,246,.18);color:#7dd3fc;border:1px solid rgba(59,130,246,.42);}
+  .up-pill.opt{background:rgba(148,163,184,.14);color:#9fb2cc;border:1px solid rgba(148,163,184,.30);}
+  .up-sec-sub{font-size:.85rem;color:#7f97ba;margin:0 0 12px;max-width:760px;}
+  .up-card-h{display:flex;align-items:center;gap:9px;font-weight:700;color:#e7edf6;
+    font-size:.98rem;margin-bottom:8px;}
+  .up-status{font-size:.8rem;color:#6b84ad;margin-top:6px;}
+  .up-status.ok{color:#22c55e;font-weight:600;}
+  .up-foot{margin-top:28px;padding-top:14px;border-top:1px solid rgba(96,165,250,.14);
+    font-size:.82rem;color:#6b84ad;}
+  /* upload cards */
+  [class*="st-key-upcard_"]{background:#0c1424;border:1px solid rgba(96,165,250,.16)!important;
+    border-radius:16px!important;padding:16px 18px!important;}
+  [class*="st-key-upcard_"] [data-testid="stFileUploaderDropzone"]{
+    background:#0a1120;border:1.5px dashed rgba(96,165,250,.30);border-radius:12px;}
+</style>
+"""
+
+
 def page_upload(tenant: dict) -> None:
     agent_id = tenant["agent_id"]
-    st.title("Upload your files")
-    st.caption(
-        "HealthSherpa builds your whole book. The carrier files add your payments, "
-        "disputes, and policy IDs on top."
-    )
+    st.markdown(_UPLOAD_CSS, unsafe_allow_html=True)
+    st.markdown(
+        f'<div class="up-hero"><div class="up-hero-ic">{_CLOUD_SVG}</div>'
+        f'<div><div class="up-hero-title">Upload your files</div>'
+        f'<div class="up-hero-sub">HealthSherpa data is your whole book. The carrier files '
+        f'add your payments, disputes, and policy IDs on top.</div></div></div>',
+        unsafe_allow_html=True)
 
     if not str(tenant.get("npn", "")).strip():
         st.warning("Set your **NPN** on the **Settings** page before uploading — without it "
@@ -230,74 +294,95 @@ def page_upload(tenant: dict) -> None:
         return
 
     ups = ingest_service.last_uploads(agent_id)
-    st.subheader("HealthSherpa export  ·  required")
-    st.caption("Clients → Export · Custom date range 01/01/2025 → today · both boxes checked.")
-    hs = st.file_uploader("HealthSherpa (.csv)", type=["csv"], key="hs")
-    _last_up(ups, "healthsherpa")
-    if hs is not None and st.button("Build my book from this file", type="primary"):
-        try:
-            with st.spinner("Reading your export and building your book…"):
-                _snap, df = ingest_service.ingest_healthsherpa(
-                    agent_id, hs.getvalue(), npn=tenant.get("npn", ""), name=tenant.get("name", "")
-                )
-            if len(df) == 0:
-                st.warning(
-                    f"We read the file, but no clients came back under your NPN "
-                    f"({tenant.get('npn') or '—'}). Double-check this is your HealthSherpa "
-                    f"export and that your NPN is correct on your account.",
-                    icon="⚠️",
-                )
-            else:
-                roster = ingest_service.build_book(agent_id, tenant.get("npn", ""), tenant.get("name", ""))
-                if roster is not None:
-                    updates.compute_and_log(agent_id, roster)
-                st.success(f"Done — read {len(df):,} rows. Taking you to your **Book Updates**…")
-                # Redirect on the next run (the nav radio is already drawn this run).
-                st.session_state["_pending_nav"] = "Book Updates"
-                st.rerun()
-        except (Exception, SystemExit) as e:
-            st.error(f"Couldn't read that file: {e}")
 
-    st.divider()
-    st.subheader("State marketplaces  ·  optional")
-    st.caption("Some states run their own exchange instead of HealthSherpa (Get Covered IL, "
-               "Georgia Access, Virginia). Add those clients here — enrolled ones merge into "
-               "your book (shopping leads are skipped, and anyone already in HealthSherpa isn't "
-               "double-counted).")
+    # ── HealthSherpa export (required) ───────────────────────────────────────────
+    st.markdown(_up_section(
+        "HealthSherpa export", "required", "REQUIRED", "req",
+        "Clients → Export · Custom date range 01/01/2025 → today · both boxes checked."),
+        unsafe_allow_html=True)
+    with st.container(border=True, key="upcard_hs"):
+        hs = st.file_uploader("HealthSherpa (.csv)", type=["csv"], key="hs",
+                              label_visibility="collapsed")
+        _up_status(ups, "healthsherpa")
+        if hs is not None and st.button("Build my book from this file", type="primary"):
+            try:
+                with st.spinner("Reading your export and building your book…"):
+                    _snap, df = ingest_service.ingest_healthsherpa(
+                        agent_id, hs.getvalue(), npn=tenant.get("npn", ""), name=tenant.get("name", "")
+                    )
+                if len(df) == 0:
+                    st.warning(
+                        f"We read the file, but no clients came back under your NPN "
+                        f"({tenant.get('npn') or '—'}). Double-check this is your HealthSherpa "
+                        f"export and that your NPN is correct on your account.",
+                        icon="⚠️",
+                    )
+                else:
+                    roster = ingest_service.build_book(agent_id, tenant.get("npn", ""), tenant.get("name", ""))
+                    if roster is not None:
+                        updates.compute_and_log(agent_id, roster)
+                    st.success(f"Done — read {len(df):,} rows. Taking you to your **Book Updates**…")
+                    st.session_state["_pending_nav"] = "Book Updates"
+                    st.rerun()
+            except (Exception, SystemExit) as e:
+                st.error(f"Couldn't read that file: {e}")
+
+    # ── State marketplaces (optional) ────────────────────────────────────────────
+    st.markdown(_up_section(
+        "State marketplaces", "optional", "OPTIONAL", "opt",
+        "Some states run their own exchange instead of HealthSherpa (Get Covered IL, Georgia "
+        "Access, Virginia). Add those clients here — enrolled ones merge into your book "
+        "(shopping leads are skipped, and anyone already in HealthSherpa isn't double-counted)."),
+        unsafe_allow_html=True)
     scols = st.columns(3)
     for i, (skey, sspec) in enumerate(ingest_service.state_sources().items()):
         with scols[i % 3]:
-            sup = st.file_uploader(f"{sspec['label']} (.csv)", type=["csv"], key=f"se_{skey}")
-            _last_up(ups, f"state_{skey}")
-            if sup is not None and st.button("Add these clients", key=f"se_btn_{skey}",
-                                             type="primary", use_container_width=True):
-                try:
-                    with st.spinner("Reading and merging…"):
-                        _snap, sdf = ingest_service.ingest_state_exchange(agent_id, sup.getvalue(), skey)
-                        roster = ingest_service.build_book(agent_id, tenant.get("npn", ""), tenant.get("name", ""))
-                        if roster is not None:
-                            updates.compute_and_log(agent_id, roster)
-                    st.success(f"Added — {len(sdf):,} enrolled clients merged. Your update summary "
-                               f"is on the **Book Updates** page.")
-                    st.session_state["_pending_nav"] = "Book Updates"
-                    st.rerun()
-                except (Exception, SystemExit) as e:
-                    st.error(f"Couldn't read that file: {e}")
+            with st.container(border=True, key=f"upcard_state_{skey}"):
+                st.markdown(f'<div class="up-card-h">{sspec["label"]} (csv)</div>',
+                            unsafe_allow_html=True)
+                sup = st.file_uploader(sspec["label"], type=["csv"], key=f"se_{skey}",
+                                       label_visibility="collapsed")
+                _up_status(ups, f"state_{skey}")
+                if sup is not None and st.button("Add these clients", key=f"se_btn_{skey}",
+                                                 type="primary", use_container_width=True):
+                    try:
+                        with st.spinner("Reading and merging…"):
+                            _snap, sdf = ingest_service.ingest_state_exchange(agent_id, sup.getvalue(), skey)
+                            roster = ingest_service.build_book(agent_id, tenant.get("npn", ""), tenant.get("name", ""))
+                            if roster is not None:
+                                updates.compute_and_log(agent_id, roster)
+                        st.success(f"Added — {len(sdf):,} enrolled clients merged. Your update summary "
+                                   f"is on the **Book Updates** page.")
+                        st.session_state["_pending_nav"] = "Book Updates"
+                        st.rerun()
+                    except (Exception, SystemExit) as e:
+                        st.error(f"Couldn't read that file: {e}")
 
-    st.divider()
-    st.subheader("Carrier books  ·  optional")
-    st.caption("Add these to unlock the payment & dispute checks. Stored privately in your workspace.")
+    # ── Carrier books (optional) ─────────────────────────────────────────────────
+    st.markdown(_up_section(
+        "Carrier books", "optional", "OPTIONAL", "opt",
+        "Add these to unlock the payment & dispute checks. Stored privately in your workspace."),
+        unsafe_allow_html=True)
     cols = st.columns(2)
     for i, (key, spec) in enumerate(ingest_service.carriers().items()):
         with cols[i % 2]:
-            up = st.file_uploader(f"{spec['label']} (.{spec['types'][0]})", type=spec["types"], key=key)
-            _last_up(ups, key)
-            if up is not None:
-                try:
-                    ingest_service.save_carrier(agent_id, key, up.getvalue())
-                    st.success(f"{spec['label']} saved ✓")
-                except Exception as e:
-                    st.error(f"{spec['label']}: {e}")
+            with st.container(border=True, key=f"upcard_carrier_{key}"):
+                st.markdown(
+                    f'<div class="up-card-h">{_file_icon(_CARRIER_ICON.get(key, "#60a5fa"))}'
+                    f'<span>{spec["label"]} ({spec["types"][0]})</span></div>',
+                    unsafe_allow_html=True)
+                up = st.file_uploader(spec["label"], type=spec["types"], key=key,
+                                      label_visibility="collapsed")
+                _up_status(ups, key)
+                if up is not None:
+                    try:
+                        ingest_service.save_carrier(agent_id, key, up.getvalue())
+                        st.success(f"{spec['label']} saved ✓")
+                    except Exception as e:
+                        st.error(f"{spec['label']}: {e}")
+
+    st.markdown('<div class="up-foot">ℹ️ Need help? Visit the <b>support center</b> or reach out '
+                'to your admin.</div>', unsafe_allow_html=True)
 
 
 _NAMES = {"first_name": "First", "last_name": "Last", "carrier": "Carrier",
