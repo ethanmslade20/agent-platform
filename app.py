@@ -1917,9 +1917,40 @@ _PAGES = {
 _NO_ROSTER = {"Upload", "Settings", "Book Updates"}
 
 
+# Per-nav-item icons (in _NAV order). Rendered as CSS masks tinted by the theme
+# so they follow --sidebar-nav / --sidebar-sel (active) automatically.
+_NAV_ICON_PATHS = {
+    "grid": ("<rect x='3' y='3' width='7' height='7' rx='1'/><rect x='14' y='3' width='7' height='7' rx='1'/>"
+             "<rect x='14' y='14' width='7' height='7' rx='1'/><rect x='3' y='14' width='7' height='7' rx='1'/>"),
+    "upload": ("<path d='M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4'/>"
+               "<polyline points='17 8 12 3 7 8'/><line x1='12' y1='3' x2='12' y2='15'/>"),
+}
+_NAV_ICONS = ["grid", "file", "calendar", "target", "users", "book", "trend", "dollar",
+              "clock", "shield", "bell", "refresh", "calendar", "upload", "gear"]
+
+
+def _nav_icon_uri(key: str) -> str:
+    import urllib.parse
+    inner = _NAV_ICON_PATHS.get(key)
+    if inner is None:
+        s = ui.ICONS.get(key, "")
+        inner = s.split(">", 1)[1].rsplit("</svg>", 1)[0] if s else ""
+    svg = ("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' "
+           "stroke-width='2' stroke-linecap='round' stroke-linejoin='round'>" + inner + "</svg>")
+    return "data:image/svg+xml," + urllib.parse.quote(svg)
+
+
 def _nav_css() -> None:
     sb = 'section[data-testid="stSidebar"] div[role="radiogroup"] > label'
-    css = [f'{sb}::before{{content:none;}}']  # drop the empty icon slots (per-item icons not ported)
+    css = [
+        f'{sb}::before{{content:"";width:20px;height:20px;flex:0 0 auto;display:inline-block;'
+        f'background:var(--sidebar-nav);opacity:.9;-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;'
+        f'-webkit-mask-position:center;mask-position:center;-webkit-mask-size:contain;mask-size:contain;}}',
+        f'{sb}:has(input:checked)::before{{background:var(--sidebar-sel);opacity:1;}}',
+    ]
+    for i, key in enumerate(_NAV_ICONS, start=1):
+        u = _nav_icon_uri(key)
+        css.append(f'{sb}:nth-of-type({i})::before{{-webkit-mask-image:url("{u}");mask-image:url("{u}");}}')
     for i, title in [(1, "OVERVIEW"), (5, "CLIENTS"), (8, "MONEY"), (10, "FOLLOW UPS")]:
         css.append(f'{sb}:nth-of-type({i}){{margin-top:{12 if i == 1 else 22}px;position:relative;overflow:visible;}}')
         css.append(f'{sb}:nth-of-type({i})::after{{content:"{title}";position:absolute;top:-15px;left:10px;'
