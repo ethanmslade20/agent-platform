@@ -391,12 +391,9 @@ _NAMES = {"first_name": "First", "last_name": "Last", "carrier": "Carrier",
 
 
 def _table(df: pd.DataFrame, cols: list, empty: str) -> None:
-    with st.container(border=True):
-        if df is None or df.empty:
-            st.info(empty)
-            return
-        show = [c for c in cols if c in df.columns]
-        st.dataframe(df[show].rename(columns=_NAMES), use_container_width=True, hide_index=True)
+    if df is not None and not df.empty:
+        df = df[[c for c in cols if c in df.columns]].rename(columns=_NAMES)
+    ui.styled_table(df, empty=empty)
 
 
 def _need_book() -> None:
@@ -622,14 +619,7 @@ def page_daily(tenant: dict, roster) -> None:
                     unsafe_allow_html=True)
         tbl = ddf.copy()
         tbl["Day"] = tbl["Date"].dt.strftime("%b %d")
-        st.dataframe(
-            tbl[["Day", "Policies", "Members"]], hide_index=True, use_container_width=True, height=430,
-            column_config={
-                "Policies": st.column_config.ProgressColumn(
-                    "Policies", min_value=0, max_value=max(int(ddf["Policies"].max()), 1), format="%d"),
-                "Members": st.column_config.ProgressColumn(
-                    "Members", min_value=0, max_value=max(int(ddf["Members"].max()), 1), format="%d"),
-            })
+        ui.styled_table(tbl[["Day", "Policies", "Members"]], height=430, bare=True)
 
     # ── Drill-down: who you signed on the clicked day ─────────────────────────
     clicked_day = None
@@ -667,8 +657,7 @@ def page_daily(tenant: dict, roster) -> None:
                     "Carrier": rows.get("carrier", ""),
                     "State": rows.get("state", ""),
                 }).sort_values("Name")
-                st.dataframe(show, use_container_width=True, hide_index=True,
-                             height=min(80 + len(show) * 35, 460))
+                ui.styled_table(show, height=min(80 + len(show) * 35, 460), bare=True)
 
 
 def page_trends(tenant: dict, roster) -> None:
@@ -709,11 +698,14 @@ def page_trends(tenant: dict, roster) -> None:
         st.markdown(ui.chart_head("Full Trend Table", "Month-by-month detail", "calendar"),
                     unsafe_allow_html=True)
         disp = mom_plot.drop(columns=["Month"]).rename(columns={"Month Label": "Month"})
-        disp = disp[["Month"] + [c for c in disp.columns if c != "Month"]]
-        st.dataframe(disp, use_container_width=True, hide_index=True, column_config={
-            "% Growth": st.column_config.NumberColumn("% Growth", format="%.1f%%"),
-            "Net Change": st.column_config.NumberColumn("Net Change", format="%+d"),
-        })
+        disp = disp[["Month"] + [c for c in disp.columns if c != "Month"]].copy()
+        if "% Growth" in disp.columns:
+            disp["% Growth"] = pd.to_numeric(disp["% Growth"], errors="coerce").map(
+                lambda v: f"{v:.1f}%" if pd.notna(v) else "—")
+        if "Net Change" in disp.columns:
+            disp["Net Change"] = pd.to_numeric(disp["Net Change"], errors="coerce").map(
+                lambda v: f"{v:+d}" if pd.notna(v) else "—")
+        ui.styled_table(disp, height=560, bare=True)
 
 
 _LOOKUP_CSS = """<style>
@@ -834,12 +826,14 @@ def page_client_lookup(tenant: dict, roster) -> None:
         pt = rows[pc].rename(columns={
             "carrier": "Carrier", "policy_number": "Policy ID", "status": "Status",
             "effective_date": "Effective", "term_date": "Term Date", "net_premium": "Premium",
-            "applicant_count": "Members", "cancel_reason": "Why Ended"})
-        st.dataframe(pt, use_container_width=True, hide_index=True,
-                     column_config={
-                         "Effective": st.column_config.DateColumn("Effective", format="MMM D, YYYY"),
-                         "Term Date": st.column_config.DateColumn("Term Date", format="MMM D, YYYY"),
-                     })
+            "applicant_count": "Members", "cancel_reason": "Why Ended"}).copy()
+        for _dc in ("Effective", "Term Date"):
+            if _dc in pt.columns:
+                pt[_dc] = pd.to_datetime(pt[_dc], errors="coerce").dt.strftime("%b %-d, %Y")
+        if "Premium" in pt.columns:
+            pt["Premium"] = pd.to_numeric(pt["Premium"], errors="coerce").map(
+                lambda v: f"${v:,.2f}" if pd.notna(v) else "—")
+        ui.styled_table(pt, bare=True)
 
 
 def _commission_upload(agent_id: str) -> None:
@@ -940,8 +934,7 @@ def page_commissions(tenant: dict, roster) -> None:
                             unsafe_allow_html=True)
                 bc = s["by_carrier"].copy()
                 bc["Paid"] = bc["Paid"].map(lambda v: f"${v:,.0f}")
-                st.dataframe(bc, use_container_width=True, hide_index=True,
-                             height=min(46 + 35 * (len(bc) + 1), 420))
+                ui.styled_table(bc, height=min(46 + 35 * (len(bc) + 1), 420), bare=True)
         with c2:
             with st.container(border=True):
                 st.markdown(ui.chart_head("Paid by Month", "Commission received over time", "trend"),
@@ -992,8 +985,7 @@ def page_commissions(tenant: dict, roster) -> None:
                             unsafe_allow_html=True)
                         gdf = rec["gaps"].copy()
                         gdf["Est $/mo"] = gdf["Est $/mo"].map(lambda v: f"${v:,.0f}")
-                        st.dataframe(gdf, use_container_width=True, hide_index=True,
-                                     height=min(46 + 35 * (len(gdf) + 1), 600))
+                        ui.styled_table(gdf, height=min(46 + 35 * (len(gdf) + 1), 600), bare=True)
                     if rec["unmatched"]:
                         st.caption(f"↳ {rec['unmatched']} payment name(s) didn't match an active client — "
                                    "usually churned clients or a name spelled differently on the statement.")
@@ -1056,8 +1048,7 @@ def page_commissions(tenant: dict, roster) -> None:
         with st.container(border=True):
             st.markdown(ui.chart_head("Commission by Carrier", "Where your monthly commission comes from", "pie"),
                         unsafe_allow_html=True)
-            st.dataframe(cc, use_container_width=True, hide_index=True,
-                         height=min(46 + 35 * (len(cc) + 1), 460))
+            ui.styled_table(cc, height=min(46 + 35 * (len(cc) + 1), 460), bare=True)
 
 
 # Goal input-card icons + KPI-tile styling (mirrors Ethan's Goals page look).
@@ -1326,7 +1317,7 @@ def page_goals(tenant: dict, roster) -> None:
         if running >= GOAL:
             break
     with st.container(border=True):
-        st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True, height=340)
+        ui.styled_table(pd.DataFrame(rows), height=340, bare=True)
 
 
 _AEP_STATUSES = ["Not Started", "Contacted", "Renewed", "Lost"]
@@ -1642,7 +1633,7 @@ def page_book(tenant: dict, roster) -> None:
             hh["Size"] = hh["n"].map(lbl)
             hht = hh[["Size", "Policies", "Members"]].copy()
             hht.loc[len(hht)] = ["Total", int(hht["Policies"].sum()), int(hht["Members"].sum())]
-            st.dataframe(hht, use_container_width=True, hide_index=True)
+            ui.styled_table(hht, bare=True)
         else:
             st.caption("No active policies in the current view.")
     st.markdown("<br>", unsafe_allow_html=True)
@@ -1658,26 +1649,30 @@ def page_book(tenant: dict, roster) -> None:
                    f"({n_names} unique names appear more than once)")
         with st.expander("View duplicates"):
             d2 = dups.copy()
+            d2["effective_date"] = pd.to_datetime(d2["effective_date"], errors="coerce").dt.strftime("%b %d, %Y")
             d2.columns = [c.replace("_", " ").title() for c in d2.columns]
-            st.dataframe(d2, use_container_width=True, hide_index=True, column_config={
-                "Effective Date": st.column_config.DateColumn("Effective Date", format="MMM D, YYYY")})
+            ui.styled_table(d2, height=360)
     st.markdown("<br>", unsafe_allow_html=True)
 
     # ── Client roster table ─────────────────────────────────────────────────────
     display_cols = ["first_name", "last_name", "carrier", "state", "status_display",
                     "effective_date", "term_date", "months_on_book", "applicant_count", "net_premium"]
-    disp = df[[c for c in display_cols if c in df.columns]].rename(columns={"status_display": "status"})
-    disp.columns = [c.replace("_", " ").title() for c in disp.columns]
+    disp = df[[c for c in display_cols if c in df.columns]].rename(columns={"status_display": "status"}).copy()
+    for _dc in ("effective_date", "term_date"):
+        if _dc in disp.columns:
+            disp[_dc] = pd.to_datetime(disp[_dc], errors="coerce").dt.strftime("%b %-d, %Y")
+    if "net_premium" in disp.columns:
+        disp["net_premium"] = pd.to_numeric(disp["net_premium"], errors="coerce").map(
+            lambda v: f"${v:,.2f}" if pd.notna(v) else "—")
+    disp = disp.rename(columns={
+        "first_name": "First Name", "last_name": "Last Name", "carrier": "Carrier",
+        "state": "State", "status": "Status", "effective_date": "Effective Date",
+        "term_date": "Term Date", "months_on_book": "Mo. on Book",
+        "applicant_count": "Members", "net_premium": "Net Premium"})
     with st.container(border=True):
         st.markdown(ui.chart_head("Client Roster", f"{len(df):,} policies in current view", "book"),
                     unsafe_allow_html=True)
-        st.dataframe(disp, use_container_width=True, hide_index=True, height=600, column_config={
-            "Effective Date": st.column_config.DateColumn("Effective Date", format="MMM D, YYYY"),
-            "Term Date": st.column_config.DateColumn("Term Date", format="MMM D, YYYY"),
-            "Net Premium": st.column_config.NumberColumn("Net Premium", format="$%.2f"),
-            "Applicant Count": st.column_config.NumberColumn("Members"),
-            "Months On Book": st.column_config.NumberColumn("Mo. on Book"),
-        })
+        ui.styled_table(disp, height=600, bare=True)
 
 
 def page_losses(tenant: dict, roster) -> None:
@@ -1801,7 +1796,7 @@ def page_aor(tenant: dict, roster) -> None:
                 "Est $/yr": t["Est $/yr"],
                 "Phone": t.get("phone", ""),
             })
-            ui.styled_table(show, height=min(46 + 35 * max(len(show), 1), 560))
+            ui.styled_table(show, height=min(46 + 35 * max(len(show), 1), 560), bare=True)
             st.caption("**Days Gone** counts from when the agent first saw the AOR change — "
                        "freshest at the top (most winnable). It builds over time as you upload.")
 
@@ -1860,7 +1855,7 @@ def page_verifications(tenant: dict, roster) -> None:
         "Phone": fv.get("phone", ""),
     })
     st.caption(f"Showing **{len(fd)}** follow-ups · open first")
-    st.dataframe(fd, use_container_width=True, hide_index=True, height=min(120 + len(fd) * 34, 620))
+    ui.styled_table(fd, height=min(120 + len(fd) * 34, 620))
     st.caption("**Open** items are still savable — reach out before they expire. **Expired** items have "
                "lost the subsidy and move to Cancelled → Re-Engage.")
 

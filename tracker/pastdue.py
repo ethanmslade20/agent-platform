@@ -81,7 +81,7 @@ def _ambetter_pastdue(path: Path, today: pd.Timestamp) -> pd.DataFrame:
         "last_name":  d["Insured Last Name"],
         "carrier":    "Ambetter",
         "state":      d.get("State"),
-        "product":    "Medical",
+        "product":    "ACA",
         # Ambetter's export has no status field; in-force + paid-through passed
         # means the member is in their grace window before cancellation.
         "status":     "Grace period",
@@ -126,7 +126,7 @@ def _oscar_pastdue(path: Path, today: pd.Timestamp) -> pd.DataFrame:
         "last_name":  nm.str.split(" ", n=1).str[1].fillna(""),
         "carrier":    "Oscar",
         "state":      d.get("State"),
-        "product":    "Medical",
+        "product":    "ACA",
         # Oscar reports the real status: Grace period / Delinquent / Unpaid binder.
         "status":     d.get("Policy status"),
         "premium":    d["prem"],

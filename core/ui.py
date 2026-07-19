@@ -576,7 +576,9 @@ table.dt tbody tr:hover td{background:rgba(96,165,250,.06);}
   font-size:.75rem;font-weight:600;}
 .dt-status::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor;flex:0 0 auto;}
 .dt-money{font-weight:700;color:#e8eef7;text-align:right;font-variant-numeric:tabular-nums;}
-.dt-num{color:#cdd9ea;text-align:center;font-variant-numeric:tabular-nums;}
+.dt-num{color:#cdd9ea;text-align:right;font-variant-numeric:tabular-nums;}
+.dt-up{color:#4ade80;font-weight:700;text-align:right;font-variant-numeric:tabular-nums;}
+.dt-down{color:#f87171;font-weight:700;text-align:right;font-variant-numeric:tabular-nums;}
 .dt-days{font-weight:700;color:#f87171;font-variant-numeric:tabular-nums;}
 .dt-days.new{color:#4ade80;}
 .dt-prod{display:inline-flex;align-items:center;gap:7px;}
@@ -606,6 +608,9 @@ def _dt_pill_color(v):
     return "#93c5fd", "rgba(59,130,246,.13)", "rgba(59,130,246,.28)"
 
 
+_NUMRE = _re.compile(r"^-?[\d,]+(\.\d+)?%?$")
+
+
 def _dt_kind(col, series):
     n = str(col).lower().strip()
     if "carrier" in n:
@@ -614,28 +619,38 @@ def _dt_kind(col, series):
         return "state"
     if n == "product":
         return "product"
+    if any(k in n for k in ("net change", "% growth", "growth", "net members", "net")):
+        return "delta"
     if any(k in n for k in ("status", "urgency", "why ended", "type", "handled")):
         return "status"
     if "days" in n:
         return "days"
-    if n in ("members", "member", "lives", "policies", "subscribers"):
-        return "num"
     if "phone" in n:
         return "muted"
     first = next((str(x) for x in series.tolist()
                   if str(x).strip().lower() not in ("", "nan", "none", "nat")), "")
     if n == "balance" or first.strip().startswith("$"):
         return "money"
+    # Pure-number columns (Members, Policies, counts, %) right-align.
+    try:
+        if pd.api.types.is_numeric_dtype(series):
+            return "num"
+    except Exception:
+        pass
+    if first and _NUMRE.match(first.replace(" ", "")):
+        return "num"
     return "text"
 
 
-def styled_table(df, empty="No rows.", height=520, max_rows=None):
+def styled_table(df, empty="No rows.", height=520, max_rows=None, bare=False):
     """Render a DataFrame as the product data-table: rounded dark container, sticky
     header, hover rows, and auto-styled cells — carrier/state pills, colored status
-    pills, red 'days' values, right-aligned money. Column types are auto-detected by
-    name/value; pass a pre-shaped DataFrame with the columns you want shown."""
+    pills, red 'days' values, right-aligned money/numbers, green/red deltas. Column
+    types auto-detect by name/value; pass a pre-shaped DataFrame with the columns you
+    want shown. bare=True drops the outer border+footer for use inside a titled card."""
     if df is None or getattr(df, "empty", True):
-        st.markdown(_DT_CSS + f'<div class="dt-wrap"><div class="dt-empty">{_html.escape(empty)}</div></div>',
+        msg = f'<div class="dt-empty">{_html.escape(empty)}</div>'
+        st.markdown(_DT_CSS + (msg if bare else f'<div class="dt-wrap">{msg}</div>'),
                     unsafe_allow_html=True)
         return
     total = len(df)
@@ -675,6 +690,10 @@ def styled_table(df, empty="No rows.", height=520, max_rows=None):
                 tds.append(f'<td class="{cls}">{e}</td>')
             elif k == "money":
                 tds.append(f'<td class="dt-money">{e}</td>')
+            elif k == "delta":
+                d = sv.strip()
+                cls = "dt-up" if d.startswith("+") else ("dt-down" if d.startswith("-") else "dt-num")
+                tds.append(f'<td class="{cls}">{e}</td>')
             elif k == "num":
                 tds.append(f'<td class="dt-num">{e}</td>')
             elif k == "muted":
@@ -683,12 +702,15 @@ def styled_table(df, empty="No rows.", height=520, max_rows=None):
                 tds.append(f'<td>{e}</td>')
         rows.append("<tr>" + "".join(tds) + "</tr>")
 
-    foot = f'<div class="dt-foot"><span>Showing {len(df):,} of {total:,}</span></div>'
-    st.markdown(
-        _DT_CSS + '<div class="dt-wrap"><div class="dt-scroll" style="max-height:' + str(height)
-        + 'px;"><table class="dt"><thead><tr>' + head + '</tr></thead><tbody>'
-        + "".join(rows) + '</tbody></table></div>' + foot + '</div>',
-        unsafe_allow_html=True)
+    table_html = ('<div class="dt-scroll" style="max-height:' + str(height) + 'px;">'
+                  '<table class="dt"><thead><tr>' + head + '</tr></thead><tbody>'
+                  + "".join(rows) + '</tbody></table></div>')
+    if bare:
+        st.markdown(_DT_CSS + table_html, unsafe_allow_html=True)
+    else:
+        foot = f'<div class="dt-foot"><span>Showing {len(df):,} of {total:,}</span></div>'
+        st.markdown(_DT_CSS + '<div class="dt-wrap">' + table_html + foot + '</div>',
+                    unsafe_allow_html=True)
 
 
 def show_chart(fig):
