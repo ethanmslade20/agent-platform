@@ -45,6 +45,8 @@ _PALETTES = {
         "--panel-grad": "linear-gradient(160deg,rgba(20,34,62,.9),rgba(11,21,42,.85))",
         "--panel": "rgba(15,28,52,.82)", "--panel-solid": "#0c1424",
         "--sidebar1": "#0b1830", "--sidebar2": "#081426", "--sidebar-text": "#e8edf5",
+        "--sidebar-nav": "#cbd5e1", "--sidebar-sel": "#dbe7ff",
+        "--sidebar-sel-bg": "rgba(30,48,92,.45)", "--sidebar-tile": "#131f3a",
         "--title-grad": "linear-gradient(96deg,#ffffff 0%,#d6e4ff 45%,#8fb3ec 100%)",
         "--text": "#f8fafc", "--text2": "#94a3b8", "--text3": "#6b84ad",
         "--border": "rgba(96,165,250,.22)", "--border2": "rgba(96,165,250,.25)",
@@ -62,9 +64,9 @@ _PALETTES = {
         "--bg": "#eef2f8", "--tint1": "rgba(124,58,237,.06)", "--tint2": "rgba(59,130,246,.08)",
         "--panel-grad": "linear-gradient(160deg,#ffffff,#f5f8fd)",
         "--panel": "#ffffff", "--panel-solid": "#ffffff",
-        # sidebar stays dark in both themes (dark rail + light content = clean, and
-        # avoids re-theming every nav item); its text uses --sidebar-text.
-        "--sidebar1": "#0b1830", "--sidebar2": "#081426", "--sidebar-text": "#e8edf5",
+        "--sidebar1": "#f6f8fc", "--sidebar2": "#eef2f8", "--sidebar-text": "#1c2b45",
+        "--sidebar-nav": "#45536b", "--sidebar-sel": "#1d4ed8",
+        "--sidebar-sel-bg": "rgba(37,99,235,.08)", "--sidebar-tile": "#e6ecf6",
         "--title-grad": "linear-gradient(96deg,#132138 0%,#1e3a6e 45%,#2563eb 100%)",
         "--text": "#132138", "--text2": "#54637c", "--text3": "#78879f",
         "--border": "rgba(37,70,130,.16)", "--border2": "rgba(37,70,130,.20)",
@@ -178,7 +180,7 @@ def inject_css():
       }}
       /* selected page: dark pill with a blue→purple ring, soft glow, red dot */
       section[data-testid="stSidebar"] div[role="radiogroup"] > label:has(input:checked) {{
-        background: rgba(30,48,92,0.45);
+        background: var(--sidebar-sel-bg);
         box-shadow: inset 0 0 0 1.5px rgba(96,165,250,0.75),
                     0 0 0 1px rgba(139,92,246,0.45),
                     0 0 18px rgba(96,165,250,0.22);
@@ -187,7 +189,7 @@ def inject_css():
         opacity: 1;
       }}
       section[data-testid="stSidebar"] div[role="radiogroup"] > label:has(input:checked) p {{
-        font-weight: 700; color: #dbe7ff;
+        font-weight: 700; color: var(--sidebar-sel);
       }}
       section[data-testid="stSidebar"] div[role="radiogroup"] > label:has(input:checked) > div:last-child,
       section[data-testid="stSidebar"] div[role="radiogroup"] > label:has(input:checked) [data-testid="stMarkdownContainer"] {{
@@ -201,18 +203,18 @@ def inject_css():
         display: none !important;
       }}
       section[data-testid="stSidebar"] div[role="radiogroup"] label p {{
-        font-size: 0.97rem; font-weight: 500; color: #cbd5e1;
+        font-size: 0.97rem; font-weight: 500; color: var(--sidebar-nav);
         display: flex; align-items: center; width: 100%;
       }}
       /* sidebar footer info rows (snapshot / client count) */
       .sb-foot {{ display: flex; align-items: center; gap: 11px; margin: 7px 2px; }}
       .sb-foot .tile {{
         flex: 0 0 auto; width: 32px; height: 32px; border-radius: 9px;
-        background: #131f3a; box-shadow: inset 0 0 0 1px rgba(96,165,250,0.14);
+        background: var(--sidebar-tile); box-shadow: inset 0 0 0 1px rgba(96,165,250,0.14);
         display: flex; align-items: center; justify-content: center; font-size: .85rem;
       }}
-      .sb-foot .txt {{ font-size: .88rem; color: #9fb2cc; }}
-      .sb-foot .txt b {{ color: #e8edf5; }}
+      .sb-foot .txt {{ font-size: .88rem; color: var(--sidebar-nav); }}
+      .sb-foot .txt b {{ color: var(--sidebar-text); }}
       /* Brand logo row */
       .brand-row {{ display: flex; align-items: center; gap: 11px; padding: 8px 4px 2px; }}
       .brand-row .brand-logo {{
@@ -220,7 +222,7 @@ def inject_css():
         background: linear-gradient(145deg, {BLUE}, {PURPLE}); box-shadow: 0 6px 16px rgba(124,58,237,0.35);
       }}
       .brand-row .brand-logo svg {{ width: 18px; height: 18px; stroke: #fff; fill: none; stroke-width: 2.2; }}
-      .brand-row .brand-text {{ font-size: 1.12rem; font-weight: 800; letter-spacing: -0.01em; color: #f8fafc; }}
+      .brand-row .brand-text {{ font-size: 1.12rem; font-weight: 800; letter-spacing: -0.01em; color: var(--sidebar-text); }}
       /* Sidebar buttons */
       [data-testid="stSidebar"] .stButton > button {{
         background: linear-gradient(90deg, {BLUE}, {PURPLE});
