@@ -1360,10 +1360,17 @@ def page_aep(tenant: dict, roster) -> None:
     st.progress(done / len(df) if len(df) else 0.0,
                 text=f"{done:,} of {len(df):,} renewed ({round(done / len(df) * 100) if len(df) else 0}%)")
 
-    edited = st.data_editor(
-        df.drop(columns=["_key"]), hide_index=True, use_container_width=True, height=460,
-        disabled=["Client", "Carrier", "State"], key="aep_editor",
-        column_config={"Status": st.column_config.SelectboxColumn("Status", options=_AEP_STATUSES, width="small")})
+    st.markdown("<style>.st-key-aepgrid [data-testid='stDataFrame'],"
+                ".st-key-aepgrid [data-testid='stDataFrameResizable']{border:none !important;"
+                "border-radius:12px;overflow:hidden;}</style>", unsafe_allow_html=True)
+    with st.container(border=True, key="aepgrid"):
+        st.markdown(ui.chart_head("Client Renewal Tracker",
+                                  "Set each client's status and add notes, then hit Save", "users"),
+                    unsafe_allow_html=True)
+        edited = st.data_editor(
+            df.drop(columns=["_key"]), hide_index=True, use_container_width=True, height=460,
+            disabled=["Client", "Carrier", "State"], key="aep_editor",
+            column_config={"Status": st.column_config.SelectboxColumn("Status", options=_AEP_STATUSES, width="small")})
 
     if st.button("Save statuses", type="primary"):
         out = {}
@@ -1465,6 +1472,24 @@ def page_settings(tenant: dict, roster) -> None:
             st.text_input("National Producer Number (NPN)", value=tenant.get("npn", ""), key="set_npn")
             st.markdown('<div class="set-sub">Your NPN keeps your book scoped to you.</div>',
                         unsafe_allow_html=True)
+        st.markdown('<div class="set-sub" style="margin-top:16px;font-weight:700;color:#cbd5e1;'
+                    'text-transform:uppercase;letter-spacing:.05em;">Change password</div>',
+                    unsafe_allow_html=True)
+        pw1, pw2, pw3 = st.columns(3)
+        _cur = pw1.text_input("Current password", type="password", key="set_pw_cur")
+        _new = pw2.text_input("New password", type="password", key="set_pw_new")
+        _conf = pw3.text_input("Confirm new password", type="password", key="set_pw_conf")
+        if st.button("Update password", key="set_pw_btn"):
+            if not _cur or not _new:
+                st.error("Enter your current password and a new password.")
+            elif _new != _conf:
+                st.error("The new passwords don't match.")
+            else:
+                try:
+                    tenants.change_password(st.session_state.tenant["username"], _cur, _new)
+                    st.success("Password updated — use it next time you sign in.")
+                except ValueError as e:
+                    st.error(str(e))
 
     # ── Licensed States & Carrier Appointments ──────────────────────────────────
     with st.container(border=True):

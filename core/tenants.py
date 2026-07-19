@@ -91,6 +91,26 @@ def update_npn(username: str, npn: str) -> None:
         _save(d)
 
 
+def change_password(username: str, current_password: str, new_password: str) -> None:
+    """Change an agent's password after verifying their current one. Stores only a
+    fresh salted hash. Raises ValueError if the current password is wrong, the new
+    one is too short, or the account is missing."""
+    d = _load()
+    u = (username or "").lower().strip()
+    rec = d.get(u)
+    if not rec:
+        raise ValueError("Account not found.")
+    if not secrets.compare_digest(_hash(current_password or "", rec["salt"]), rec["hash"]):
+        raise ValueError("Current password is incorrect.")
+    if len(new_password or "") < 6:
+        raise ValueError("New password must be at least 6 characters.")
+    salt = secrets.token_hex(16)
+    rec["salt"] = salt
+    rec["hash"] = _hash(new_password, salt)
+    d[u] = rec
+    _save(d)
+
+
 def rename(old_username: str, new_username: str) -> dict:
     """Change an agent's login username, keeping their agent_id (and all data).
     Raises ValueError if the new name is empty, taken, or the account is missing."""
