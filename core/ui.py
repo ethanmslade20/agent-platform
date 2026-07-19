@@ -46,7 +46,9 @@ _PALETTES = {
         "--panel": "rgba(15,28,52,.82)", "--panel-solid": "#0c1424",
         "--sidebar1": "#0b1830", "--sidebar2": "#081426", "--sidebar-text": "#e8edf5",
         "--sidebar-nav": "#cbd5e1", "--sidebar-sel": "#dbe7ff",
-        "--sidebar-sel-bg": "rgba(30,48,92,.45)", "--sidebar-tile": "#131f3a",
+        "--sidebar-sel-bg": "rgba(30,48,92,.45)", "--sidebar-ring": "rgba(96,165,250,.75)",
+        "--sidebar-tile": "#131f3a", "--nav-label": "#6b84ad", "--sec-head": "#94a3b8",
+        "--nav-active-shadow": "inset 0 0 0 1.5px rgba(96,165,250,.75),0 0 0 1px rgba(139,92,246,.45),0 0 18px rgba(96,165,250,.22)",
         "--title-grad": "linear-gradient(96deg,#ffffff 0%,#d6e4ff 45%,#8fb3ec 100%)",
         "--text": "#f8fafc", "--text2": "#94a3b8", "--text3": "#6b84ad",
         "--border": "rgba(96,165,250,.22)", "--border2": "rgba(96,165,250,.25)",
@@ -59,26 +61,43 @@ _PALETTES = {
         "--dt-hover": "rgba(96,165,250,.06)", "--dt-muted": "#7b91b3",
         "--pill-bg": "rgba(59,130,246,.16)", "--pill-text": "#93c5fd", "--pill-bd": "rgba(59,130,246,.30)",
         "--pos": "#4ade80", "--neg": "#f87171",
+        # icon boxes — pos/neg equal info in dark so dark stays unchanged
+        "--icon-info-bg": "linear-gradient(145deg,rgba(59,130,246,.18),rgba(124,58,237,.13))",
+        "--icon-info": "#60a5fa",
+        "--icon-pos-bg": "linear-gradient(145deg,rgba(59,130,246,.18),rgba(124,58,237,.13))",
+        "--icon-pos": "#60a5fa",
+        "--icon-neg-bg": "linear-gradient(145deg,rgba(59,130,246,.18),rgba(124,58,237,.13))",
+        "--icon-neg": "#60a5fa",
+        "--card-shadow": "inset 0 1px 0 rgba(255,255,255,.03),0 10px 30px rgba(0,0,0,.25)",
+        "--card-shadow-hover": "0 0 0 1px rgba(96,165,250,.25),0 16px 42px rgba(8,20,46,.6),0 0 32px rgba(59,130,246,.16)",
     },
     "light": {
-        "--bg": "#eef2f8", "--tint1": "rgba(124,58,237,.06)", "--tint2": "rgba(59,130,246,.08)",
-        "--panel-grad": "linear-gradient(160deg,#ffffff,#f5f8fd)",
+        "--bg": "#f8fafc", "--tint1": "rgba(22,119,255,.04)", "--tint2": "rgba(22,119,255,.05)",
+        "--panel-grad": "#ffffff",
         "--panel": "#ffffff", "--panel-solid": "#ffffff",
-        "--sidebar1": "#f6f8fc", "--sidebar2": "#eef2f8", "--sidebar-text": "#1c2b45",
-        "--sidebar-nav": "#45536b", "--sidebar-sel": "#1d4ed8",
-        "--sidebar-sel-bg": "rgba(37,99,235,.08)", "--sidebar-tile": "#e6ecf6",
-        "--title-grad": "linear-gradient(96deg,#132138 0%,#1e3a6e 45%,#2563eb 100%)",
-        "--text": "#132138", "--text2": "#54637c", "--text3": "#78879f",
-        "--border": "rgba(37,70,130,.16)", "--border2": "rgba(37,70,130,.20)",
-        "--divider": "rgba(37,70,130,.14)", "--hover": "rgba(37,99,235,.07)",
-        "--input-bg": "#ffffff", "--progress-bg": "#dfe6f1", "--accent-blue": "#2563eb",
-        "--hl-grad": "linear-gradient(160deg,rgba(124,58,237,.10),rgba(124,58,237,.03))",
-        "--hl-green-grad": "linear-gradient(160deg,rgba(34,197,94,.12),rgba(34,197,94,.04))",
-        "--dt-bg": "#ffffff", "--dt-head": "#f1f5fb", "--dt-text": "#25344c",
-        "--dt-head-text": "#5b6b85", "--dt-row": "rgba(37,70,130,.10)",
-        "--dt-hover": "rgba(37,99,235,.06)", "--dt-muted": "#7a889f",
-        "--pill-bg": "rgba(37,99,235,.10)", "--pill-text": "#1d4ed8", "--pill-bd": "rgba(37,99,235,.28)",
-        "--pos": "#16a34a", "--neg": "#dc2626",
+        "--sidebar1": "#ffffff", "--sidebar2": "#ffffff", "--sidebar-text": "#0f172a",
+        "--sidebar-nav": "#0f172a", "--sidebar-sel": "#1677ff",
+        "--sidebar-sel-bg": "linear-gradient(90deg,#f5f9ff 0%,#edf5ff 100%)",
+        "--sidebar-ring": "#74a9ff", "--sidebar-tile": "#eef4fb",
+        "--nav-label": "#1677ff", "--sec-head": "#1268d6",
+        "--nav-active-shadow": "inset 0 0 0 1.5px #74a9ff,0 3px 12px rgba(22,119,255,.10)",
+        "--title-grad": "linear-gradient(96deg,#071224 0%,#0b2c66 55%,#1268d6 100%)",
+        "--text": "#0f172a", "--text2": "#62728d", "--text3": "#7c8ba1",
+        "--border": "#dce4ee", "--border2": "#dce4ee",
+        "--divider": "#e5ebf2", "--hover": "#f5f8fc",
+        "--input-bg": "#ffffff", "--progress-bg": "#e8eef6", "--accent-blue": "#1677ff",
+        "--hl-grad": "linear-gradient(160deg,#eaf3ff,#f5f9ff)",
+        "--hl-green-grad": "linear-gradient(160deg,#e7f8ed,#f2fcf5)",
+        "--dt-bg": "#ffffff", "--dt-head": "#f8fafc", "--dt-text": "#0f172a",
+        "--dt-head-text": "#62728d", "--dt-row": "#e8edf3",
+        "--dt-hover": "#f5f8fc", "--dt-muted": "#7c8ba1",
+        "--pill-bg": "#eaf3ff", "--pill-text": "#1268d6", "--pill-bd": "#74a9ff",
+        "--pos": "#16b84e", "--neg": "#ff323c",
+        "--icon-info-bg": "#eaf3ff", "--icon-info": "#1677ff",
+        "--icon-pos-bg": "#e7f8ed", "--icon-pos": "#16b84e",
+        "--icon-neg-bg": "#ffebed", "--icon-neg": "#ff323c",
+        "--card-shadow": "0 1px 2px rgba(15,23,42,.03),0 8px 22px rgba(15,23,42,.055)",
+        "--card-shadow-hover": "0 2px 6px rgba(15,23,42,.06),0 14px 30px rgba(15,23,42,.10)",
     },
 }
 
@@ -181,9 +200,7 @@ def inject_css():
       /* selected page: dark pill with a blue→purple ring, soft glow, red dot */
       section[data-testid="stSidebar"] div[role="radiogroup"] > label:has(input:checked) {{
         background: var(--sidebar-sel-bg);
-        box-shadow: inset 0 0 0 1.5px rgba(96,165,250,0.75),
-                    0 0 0 1px rgba(139,92,246,0.45),
-                    0 0 18px rgba(96,165,250,0.22);
+        box-shadow: var(--nav-active-shadow);
       }}
       section[data-testid="stSidebar"] div[role="radiogroup"] > label:has(input:checked)::before {{
         opacity: 1;
@@ -292,7 +309,7 @@ def inject_css():
       .section-head .sh-icon svg {{ width: 16px; height: 16px; stroke: {ELEC}; fill: none; stroke-width: 2; }}
       .section-head .sh-title {{
         font-size: 0.78rem; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase;
-        color: {T['kpi_lbl']}; white-space: nowrap;
+        color: var(--sec-head); white-space: nowrap;
       }}
       .section-head .sh-line {{ flex: 1; height: 1px; background: linear-gradient(90deg, rgba(96,165,250,0.28), rgba(96,165,250,0.02)); }}
     
@@ -302,14 +319,14 @@ def inject_css():
         background: var(--panel-grad);
         border: 1px solid {T['kpi_border']};
         border-radius: 18px; padding: 22px 22px 18px;
-        box-shadow: inset 0 1px 0 rgba(255,255,255,0.03), 0 10px 30px rgba(0,0,0,0.25);
+        box-shadow: var(--card-shadow);
         transition: transform .2s ease, border-color .2s ease, box-shadow .2s ease;
         height: 100%;
       }}
       .metric-card:hover {{
         transform: translateY(-3px);
         border-color: rgba(96,165,250,0.55);
-        box-shadow: 0 0 0 1px rgba(96,165,250,0.25), 0 16px 42px rgba(8,20,46,0.6), 0 0 32px rgba(59,130,246,0.16);
+        box-shadow: var(--card-shadow-hover);
       }}
       .metric-card.highlight {{
         border-color: rgba(124,58,237,0.6);
@@ -326,10 +343,14 @@ def inject_css():
       .metric-card.highlight.green .mc-icon svg {{ stroke: {GREEN}; }}
       .mc-icon {{
         width: 42px; height: 42px; border-radius: 12px; display: flex; align-items: center; justify-content: center;
-        background: linear-gradient(145deg, rgba(59,130,246,0.18), rgba(124,58,237,0.13));
+        background: var(--icon-info-bg);
         border: 1px solid rgba(96,165,250,0.22);
       }}
-      .mc-icon svg {{ width: 20px; height: 20px; stroke: {ELEC}; fill: none; stroke-width: 2; }}
+      .mc-icon svg {{ width: 20px; height: 20px; stroke: var(--icon-info); fill: none; stroke-width: 2; }}
+      .mc-icon.mc-plus {{ background: var(--icon-pos-bg); }}
+      .mc-icon.mc-plus svg {{ stroke: var(--icon-pos); }}
+      .mc-icon.mc-minus {{ background: var(--icon-neg-bg); }}
+      .mc-icon.mc-minus svg {{ stroke: var(--icon-neg); }}
       .metric-card.highlight .mc-icon svg {{ stroke: #c4b5fd; }}
       .mc-value {{ font-size: 2.5rem; font-weight: 800; color: {T['kpi_val']}; line-height: 1.04; margin-top: 16px; letter-spacing: -0.02em; }}
       .mc-label {{ font-size: 0.72rem; color: {T['kpi_lbl']}; text-transform: uppercase; letter-spacing: 0.08em; margin-top: 5px; font-weight: 600; }}
@@ -370,12 +391,12 @@ def inject_css():
         border: 1px solid rgba(96,165,250,0.22) !important;
         border-radius: 20px !important;
         padding: 8px 14px 10px;
-        box-shadow: inset 0 1px 0 rgba(255,255,255,0.03), 0 10px 30px rgba(0,0,0,0.25);
+        box-shadow: var(--card-shadow);
         transition: border-color .2s ease, box-shadow .2s ease;
       }}
       [data-testid="stVerticalBlockBorderWrapper"]:hover {{
         border-color: rgba(96,165,250,0.45) !important;
-        box-shadow: 0 0 0 1px rgba(96,165,250,0.2), 0 14px 40px rgba(8,20,46,0.55), 0 0 28px rgba(59,130,246,0.12);
+        box-shadow: var(--card-shadow-hover);
       }}
       /* Chart card header */
       .chart-head {{ display: flex; align-items: flex-start; gap: 12px; padding: 12px 6px 6px; }}
@@ -575,7 +596,7 @@ def metric_card(label, value, sub="", icon_key="", spark="", highlight=False):
         cls = "metric-card highlight" + (f" {highlight}" if isinstance(highlight, str) else "")
     else:
         cls = "metric-card"
-    icon_html = f'<div class="mc-icon">{ICONS.get(icon_key, "")}</div>' if icon_key else ""
+    icon_html = f'<div class="mc-icon mc-{icon_key}">{ICONS.get(icon_key, "")}</div>' if icon_key else ""
     sub_html = f'<div class="mc-sub">{sub}</div>' if sub else ""
     return (
         f'<div class="{cls}">{icon_html}{spark}'

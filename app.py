@@ -1923,7 +1923,7 @@ def _nav_css() -> None:
     for i, title in [(1, "OVERVIEW"), (5, "CLIENTS"), (8, "MONEY"), (10, "FOLLOW UPS")]:
         css.append(f'{sb}:nth-of-type({i}){{margin-top:{12 if i == 1 else 22}px;position:relative;overflow:visible;}}')
         css.append(f'{sb}:nth-of-type({i})::after{{content:"{title}";position:absolute;top:-15px;left:10px;'
-                   f'font-size:.64rem;letter-spacing:.13em;color:var(--text3);font-weight:700;}}')
+                   f'font-size:.64rem;letter-spacing:.13em;color:var(--nav-label);font-weight:700;}}')
     css.append(f'{sb}:nth-of-type(14){{margin-top:26px;border-top:1px solid rgba(96,165,250,0.18);padding-top:12px;}}')
     st.markdown(f"<style>{''.join(css)}</style>", unsafe_allow_html=True)
 
