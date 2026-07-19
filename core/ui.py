@@ -1,5 +1,8 @@
 """Design system ported from Ethan's commission-tracker so the product matches
 his look — midnight fintech theme, metric cards, section headers, sparklines."""
+import html as _html
+import re as _re
+
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
@@ -551,6 +554,141 @@ def chart_head(title, sub, icon_key):
         f'<div class="ch-dots">⋮</div></div>'
     )
 
+
+
+_DT_CSS = """<style>
+.dt-wrap{border:1px solid rgba(96,165,250,.16);border-radius:16px;background:#0b1322;
+  overflow:hidden;margin:4px 0 6px;}
+.dt-scroll{overflow:auto;}
+table.dt{border-collapse:collapse;width:100%;font-size:.86rem;color:#dbe4f0;}
+table.dt thead th{position:sticky;top:0;z-index:1;background:#0e1830;color:#8aa2c4;font-weight:600;
+  font-size:.7rem;letter-spacing:.045em;text-transform:uppercase;text-align:left;padding:12px 16px;
+  border-bottom:1px solid rgba(96,165,250,.16);white-space:nowrap;}
+table.dt th.r{text-align:right;} table.dt th.c{text-align:center;}
+table.dt tbody td{padding:11px 16px;border-bottom:1px solid rgba(96,165,250,.07);white-space:nowrap;}
+table.dt tbody tr:last-child td{border-bottom:none;}
+table.dt tbody tr:hover td{background:rgba(96,165,250,.06);}
+.dt-pill{display:inline-block;padding:2px 10px;border-radius:999px;font-size:.76rem;font-weight:600;
+  background:rgba(59,130,246,.16);color:#93c5fd;border:1px solid rgba(59,130,246,.30);}
+.dt-state{display:inline-block;padding:1px 8px;border-radius:6px;font-size:.72rem;font-weight:700;
+  background:rgba(96,165,250,.14);color:#bcd4f2;border:1px solid rgba(96,165,250,.24);}
+.dt-status{display:inline-flex;align-items:center;gap:6px;padding:2px 11px;border-radius:999px;
+  font-size:.75rem;font-weight:600;}
+.dt-status::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor;flex:0 0 auto;}
+.dt-money{font-weight:700;color:#e8eef7;text-align:right;font-variant-numeric:tabular-nums;}
+.dt-num{color:#cdd9ea;text-align:center;font-variant-numeric:tabular-nums;}
+.dt-days{font-weight:700;color:#f87171;font-variant-numeric:tabular-nums;}
+.dt-days.new{color:#4ade80;}
+.dt-prod{display:inline-flex;align-items:center;gap:7px;}
+.dt-prod svg{width:15px;height:15px;stroke:#7c9cc4;fill:none;stroke-width:1.8;}
+.dt-muted{color:#7b91b3;}
+.dt-foot{display:flex;justify-content:space-between;align-items:center;padding:10px 16px;
+  font-size:.78rem;color:#7b91b3;border-top:1px solid rgba(96,165,250,.10);}
+.dt-empty{padding:22px 16px;color:#8aa2c4;font-size:.9rem;}
+</style>"""
+
+_DT_EMOJI = _re.compile(r"[\U0001F534\U0001F7E1\U0001F7E0\U0001F7E2⚪\U0001F535]")
+_SHIELD = ('<svg viewBox="0 0 24 24"><path d="M12 2l8 4v6c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6z"/></svg>')
+
+
+def _dt_pill_color(v):
+    s = str(v).lower()
+    if "\U0001F534" in s or any(k in s for k in ("cancel", "lapse", "taken", "expired", "terminat",
+            "overdue", "past due", "inactive", "never paid", "stopped", "<30", "at risk")):
+        return "#f87171", "rgba(239,68,68,.13)", "rgba(239,68,68,.30)"
+    if any(e in s for e in ("\U0001F7E1", "\U0001F7E0")) or any(k in s for k in ("pending", "open",
+            "follow", "binder", "grace", "disconnect", "30–60", "60–90", "30-60", "60-90", "due")):
+        return "#fbbf24", "rgba(245,158,11,.13)", "rgba(245,158,11,.30)"
+    if any(k in s for k in ("paid", "active", "effectuat", "enrolled", "current", "matches", "reconnect")):
+        return "#4ade80", "rgba(34,197,94,.13)", "rgba(34,197,94,.30)"
+    if "⚪" in s or "90+" in s or "unknown" in s:
+        return "#94a3b8", "rgba(148,163,184,.12)", "rgba(148,163,184,.26)"
+    return "#93c5fd", "rgba(59,130,246,.13)", "rgba(59,130,246,.28)"
+
+
+def _dt_kind(col, series):
+    n = str(col).lower().strip()
+    if "carrier" in n:
+        return "carrier"
+    if n in ("state", "st"):
+        return "state"
+    if n == "product":
+        return "product"
+    if any(k in n for k in ("status", "urgency", "why ended", "type", "handled")):
+        return "status"
+    if "days" in n:
+        return "days"
+    if n in ("members", "member", "lives", "policies", "subscribers"):
+        return "num"
+    if "phone" in n:
+        return "muted"
+    first = next((str(x) for x in series.tolist()
+                  if str(x).strip().lower() not in ("", "nan", "none", "nat")), "")
+    if n == "balance" or first.strip().startswith("$"):
+        return "money"
+    return "text"
+
+
+def styled_table(df, empty="No rows.", height=520, max_rows=None):
+    """Render a DataFrame as the product data-table: rounded dark container, sticky
+    header, hover rows, and auto-styled cells — carrier/state pills, colored status
+    pills, red 'days' values, right-aligned money. Column types are auto-detected by
+    name/value; pass a pre-shaped DataFrame with the columns you want shown."""
+    if df is None or getattr(df, "empty", True):
+        st.markdown(_DT_CSS + f'<div class="dt-wrap"><div class="dt-empty">{_html.escape(empty)}</div></div>',
+                    unsafe_allow_html=True)
+        return
+    total = len(df)
+    if max_rows and total > max_rows:
+        df = df.head(max_rows)
+    cols = list(df.columns)
+    kinds = {c: _dt_kind(c, df[c]) for c in cols}
+    hcls = {c: ("r" if kinds[c] == "money" else ("c" if kinds[c] == "num" else "")) for c in cols}
+    head = "".join(f'<th class="{hcls[c]}">{_html.escape(str(c))}</th>' for c in cols)
+
+    rows = []
+    for _, row in df.iterrows():
+        tds = []
+        for c in cols:
+            v = row[c]
+            sv = "" if v is None else str(v)
+            if sv.strip().lower() in ("nan", "none", "nat"):
+                sv = ""
+            k = kinds[c]
+            if not sv:
+                tds.append('<td class="dt-muted">—</td>')
+                continue
+            e = _html.escape(sv)
+            if k == "carrier":
+                tds.append(f'<td><span class="dt-pill">{e}</span></td>')
+            elif k == "state":
+                tds.append(f'<td><span class="dt-state">{e}</span></td>')
+            elif k == "product":
+                tds.append(f'<td><span class="dt-prod">{_SHIELD}{e}</span></td>')
+            elif k == "status":
+                fg, bg, bd = _dt_pill_color(sv)
+                txt = _html.escape(_DT_EMOJI.sub("", sv).strip())
+                tds.append(f'<td><span class="dt-status" style="color:{fg};background:{bg};'
+                           f'border:1px solid {bd};">{txt}</span></td>')
+            elif k == "days":
+                cls = "dt-days new" if sv.strip().lower() in ("new", "0", "today", "0d") else "dt-days"
+                tds.append(f'<td class="{cls}">{e}</td>')
+            elif k == "money":
+                tds.append(f'<td class="dt-money">{e}</td>')
+            elif k == "num":
+                tds.append(f'<td class="dt-num">{e}</td>')
+            elif k == "muted":
+                tds.append(f'<td class="dt-muted">{e}</td>')
+            else:
+                tds.append(f'<td>{e}</td>')
+        rows.append("<tr>" + "".join(tds) + "</tr>")
+
+    foot = f'<div class="dt-foot"><span>Showing {len(df):,} of {total:,}</span></div>'
+    st.markdown(
+        _DT_CSS + '<div class="dt-wrap"><div class="dt-scroll" style="max-height:' + str(height)
+        + 'px;"><table class="dt"><thead><tr>' + head + '</tr></thead><tbody>'
+        + "".join(rows) + '</tbody></table></div>' + foot + '</div>',
+        unsafe_allow_html=True)
 
 
 def show_chart(fig):

@@ -1751,7 +1751,7 @@ def page_losses(tenant: dict, roster) -> None:
                       if "cancel_reason" in view.columns else "—"),
         "Phone": view.get("phone", ""),
     })
-    st.dataframe(show, use_container_width=True, hide_index=True, height=min(120 + len(show) * 34, 620))
+    ui.styled_table(show, height=min(120 + len(show) * 34, 620))
 
 
 def page_aor(tenant: dict, roster) -> None:
@@ -1801,8 +1801,7 @@ def page_aor(tenant: dict, roster) -> None:
                 "Est $/yr": t["Est $/yr"],
                 "Phone": t.get("phone", ""),
             })
-            st.dataframe(show, use_container_width=True, hide_index=True,
-                         height=min(46 + 35 * max(len(show), 1), 560))
+            ui.styled_table(show, height=min(46 + 35 * max(len(show), 1), 560))
             st.caption("**Days Gone** counts from when the agent first saw the AOR change — "
                        "freshest at the top (most winnable). It builds over time as you upload.")
 
@@ -1875,8 +1874,7 @@ def page_pastdue(tenant: dict, roster) -> None:
                 "see who's behind on payment.", icon="📥")
         return
     _stat(ui.stat_card("Past due", f"{len(pd_df):,}", "clock", ui.RED))
-    with st.container(border=True):
-        st.dataframe(pd_df, use_container_width=True, hide_index=True)
+    ui.styled_table(pd_df, empty="Nothing past due.")
 
 
 # ── Shell ───────────────────────────────────────────────────────────────────
