@@ -793,6 +793,24 @@ def _commission_upload(agent_id: str) -> None:
             sel = col.selectbox(label + (" *" if req else ""), opts, index=idx, key=f"cm_{key}")
             chosen[key] = None if sel == "(none)" else sel
 
+        # Capture check: does the parsed sum match the statement's own printed total?
+        stated = commissions_ingest.stated_total(up.getvalue(), up.name)
+        if chosen.get("amount"):
+            try:
+                preview = commissions_ingest.parse(df, chosen, up.name)
+                psum = float(preview["amount"].sum())
+                if stated is not None and abs(psum - stated) < 0.5:
+                    st.success(f"Captured ${psum:,.2f} across {len(preview):,} lines — "
+                               f"matches the statement's total ✓")
+                elif stated is not None:
+                    st.warning(f"Captured ${psum:,.2f}, but the statement's total says "
+                               f"${stated:,.2f} (off by ${abs(psum - stated):,.2f}). "
+                               f"Double-check the amount column before saving.")
+                else:
+                    st.caption(f"Captured ${psum:,.2f} across {len(preview):,} lines.")
+            except Exception:
+                pass
+
         if st.button("Save & add", type="primary"):
             try:
                 new = commissions_ingest.parse(df, chosen, up.name)

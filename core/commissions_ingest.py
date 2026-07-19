@@ -54,6 +54,11 @@ _SUMMARY_RE = re.compile(
     r"^\s*(grand\s*total|sub\s*total|totals?|sum|balance|amount\s*due|"
     r"total\s*(commission|paid|due|amount))\s*:?\s*$", re.I)
 
+# The statement's own printed grand total ("Total Commission Paid: $3,224"), used
+# as a capture check — does the sum of the parsed rows match what the file claims?
+_TOTAL_LABEL_RE = re.compile(
+    r"total\s*commission(s)?\s*(paid|due)?|grand\s*total|total\s*(paid|commission)", re.I)
+
 
 def _norm(s) -> str:
     return re.sub(r"\s+", " ", str(s).strip().lower())
@@ -199,6 +204,41 @@ def read_pdf(data: bytes) -> pd.DataFrame:
 
     raise ValueError("Couldn't find a table in that PDF. If it's a scanned image, "
                      "export the statement as CSV/Excel instead.")
+
+
+def stated_total(data: bytes, filename: str):
+    """Best-effort read of the statement's own printed grand total (e.g.
+    'Total Commission Paid: $3,224') for a capture check. None if not present."""
+    name = (filename or "").lower()
+    rows = []
+    try:
+        if name.endswith((".xlsx", ".xls")):
+            raw = pd.read_excel(io.BytesIO(data), header=None, dtype=str)
+            rows = [[_clean_cell(c) for c in r] for r in raw.values.tolist()]
+        elif name.endswith(".pdf"):
+            import pdfplumber
+            lines = []
+            with pdfplumber.open(io.BytesIO(data)) as pdf:
+                for page in pdf.pages:
+                    lines += (page.extract_text() or "").split("\n")
+            rows = [re.split(r"\s{2,}|:\s+", ln) for ln in lines]
+        else:
+            raw = pd.read_csv(io.BytesIO(data), header=None, dtype=str,
+                              keep_default_na=False, on_bad_lines="skip", engine="python")
+            rows = [[_clean_cell(c) for c in r] for r in raw.values.tolist()]
+    except Exception:
+        return None
+
+    for row in rows:
+        for j, c in enumerate(row):
+            if c and _TOTAL_LABEL_RE.search(str(c)):
+                for cand in [c] + list(row[j + 1:]):
+                    m = re.search(r"-?\$?\s*[\d,]+(?:\.\d+)?", str(cand))
+                    if m:
+                        val = _money(m.group())
+                        if val:
+                            return val
+    return None
 
 
 def header_sig(df: pd.DataFrame) -> str:
