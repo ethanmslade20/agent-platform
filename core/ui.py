@@ -17,22 +17,82 @@ CYAN  = "#22d3ee"
 GREEN = "#22c55e"
 RED   = "#ef4444"
 GOLD  = "#f59e0b"
+# Theme is driven by CSS variables (see _PALETTES / theme_root_css) so a single
+# toggle flips the whole app. T maps the old token names onto those variables so
+# every existing rule keeps working.
 T = dict(
-    page_bg      = "#070f22",
-    sidebar_bg   = "#081426",
-    kpi_bg       = "rgba(15, 28, 52, 0.82)",
-    kpi_border   = "rgba(96, 165, 250, 0.25)",
-    kpi_val      = "#f8fafc",
-    kpi_lbl      = "#94a3b8",
-    kpi_sub      = "#6b84ad",
-    divider      = "rgba(96, 165, 250, 0.18)",
-    progress_bg  = "#0a1326",
-    goal_val     = "#60a5fa",
+    page_bg      = "var(--bg)",
+    sidebar_bg   = "var(--sidebar2)",
+    kpi_bg       = "var(--panel)",
+    kpi_border   = "var(--border2)",
+    kpi_val      = "var(--text)",
+    kpi_lbl      = "var(--text2)",
+    kpi_sub      = "var(--text3)",
+    divider      = "var(--divider)",
+    progress_bg  = "var(--progress-bg)",
+    goal_val     = "var(--accent-blue)",
     goal_green   = "#22c55e",
     goal_gold    = "#f59e0b",
     goal_red     = "#ef4444",
-    text_primary = "#f8fafc",
+    text_primary = "var(--text)",
 )
+
+# Dark + light palettes. Accent hues (green/red/gold/purple) are shared; only the
+# neutrals (backgrounds, panels, text, borders) flip.
+_PALETTES = {
+    "dark": {
+        "--bg": "#070f22", "--tint1": "rgba(124,58,237,.13)", "--tint2": "rgba(59,130,246,.13)",
+        "--panel-grad": "linear-gradient(160deg,rgba(20,34,62,.9),rgba(11,21,42,.85))",
+        "--panel": "rgba(15,28,52,.82)", "--panel-solid": "#0c1424",
+        "--sidebar1": "#0b1830", "--sidebar2": "#081426", "--sidebar-text": "#e8edf5",
+        "--title-grad": "linear-gradient(96deg,#ffffff 0%,#d6e4ff 45%,#8fb3ec 100%)",
+        "--text": "#f8fafc", "--text2": "#94a3b8", "--text3": "#6b84ad",
+        "--border": "rgba(96,165,250,.22)", "--border2": "rgba(96,165,250,.25)",
+        "--divider": "rgba(96,165,250,.18)", "--hover": "rgba(96,165,250,.07)",
+        "--input-bg": "rgba(15,23,42,.6)", "--progress-bg": "#0a1326", "--accent-blue": "#60a5fa",
+        "--hl-grad": "linear-gradient(160deg,rgba(38,29,74,.92),rgba(16,20,52,.9))",
+        "--hl-green-grad": "linear-gradient(160deg,rgba(20,60,40,.92),rgba(14,30,28,.9))",
+        "--dt-bg": "#0b1322", "--dt-head": "#0e1830", "--dt-text": "#dbe4f0",
+        "--dt-head-text": "#8aa2c4", "--dt-row": "rgba(96,165,250,.07)",
+        "--dt-hover": "rgba(96,165,250,.06)", "--dt-muted": "#7b91b3",
+        "--pill-bg": "rgba(59,130,246,.16)", "--pill-text": "#93c5fd", "--pill-bd": "rgba(59,130,246,.30)",
+        "--pos": "#4ade80", "--neg": "#f87171",
+    },
+    "light": {
+        "--bg": "#eef2f8", "--tint1": "rgba(124,58,237,.06)", "--tint2": "rgba(59,130,246,.08)",
+        "--panel-grad": "linear-gradient(160deg,#ffffff,#f5f8fd)",
+        "--panel": "#ffffff", "--panel-solid": "#ffffff",
+        # sidebar stays dark in both themes (dark rail + light content = clean, and
+        # avoids re-theming every nav item); its text uses --sidebar-text.
+        "--sidebar1": "#0b1830", "--sidebar2": "#081426", "--sidebar-text": "#e8edf5",
+        "--title-grad": "linear-gradient(96deg,#132138 0%,#1e3a6e 45%,#2563eb 100%)",
+        "--text": "#132138", "--text2": "#54637c", "--text3": "#78879f",
+        "--border": "rgba(37,70,130,.16)", "--border2": "rgba(37,70,130,.20)",
+        "--divider": "rgba(37,70,130,.14)", "--hover": "rgba(37,99,235,.07)",
+        "--input-bg": "#ffffff", "--progress-bg": "#dfe6f1", "--accent-blue": "#2563eb",
+        "--hl-grad": "linear-gradient(160deg,rgba(124,58,237,.10),rgba(124,58,237,.03))",
+        "--hl-green-grad": "linear-gradient(160deg,rgba(34,197,94,.12),rgba(34,197,94,.04))",
+        "--dt-bg": "#ffffff", "--dt-head": "#f1f5fb", "--dt-text": "#25344c",
+        "--dt-head-text": "#5b6b85", "--dt-row": "rgba(37,70,130,.10)",
+        "--dt-hover": "rgba(37,99,235,.06)", "--dt-muted": "#7a889f",
+        "--pill-bg": "rgba(37,99,235,.10)", "--pill-text": "#1d4ed8", "--pill-bd": "rgba(37,99,235,.28)",
+        "--pos": "#16a34a", "--neg": "#dc2626",
+    },
+}
+
+
+def theme_root_css(theme: str) -> str:
+    """The :root variable block for the active theme + a light-mode readability net."""
+    p = _PALETTES.get(theme, _PALETTES["dark"])
+    root = ";".join(f"{k}:{v}" for k, v in p.items())
+    fix = ""
+    if theme == "light":
+        # Catch text that hardcodes a light color inline so it stays readable on white.
+        fix = ("[data-testid='stAppViewContainer'],[data-testid='stMarkdownContainer']{color:var(--text);}"
+               "[data-testid='stAppViewContainer'] p{color:var(--text2);}"
+               "[data-baseweb='select'] *{color:var(--text) !important;}"
+               "[data-baseweb='popover'] li{color:var(--text) !important;}")
+    return f"<style>:root{{{root}}}{fix}</style>"
 
 ICONS = {
     "shield":   '<svg viewBox="0 0 24 24"><path d="M12 2l8 4v6c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6l8-4z"/></svg>',
@@ -58,6 +118,8 @@ ICONS = {
 }
 
 def inject_css():
+    # Palette first (dark/light) so every var() below resolves for the active theme.
+    st.markdown(theme_root_css(st.session_state.get("agent_theme", "dark")), unsafe_allow_html=True)
     st.markdown(f"""
     <style>
       @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
@@ -70,8 +132,8 @@ def inject_css():
       /* Page background with radial lighting */
       [data-testid="stAppViewContainer"] {{
         background:
-          radial-gradient(1100px 560px at 82% -8%, rgba(124,58,237,0.13), transparent 60%),
-          radial-gradient(900px 520px at 8% -4%, rgba(59,130,246,0.13), transparent 55%),
+          radial-gradient(1100px 560px at 82% -8%, var(--tint1), transparent 60%),
+          radial-gradient(900px 520px at 8% -4%, var(--tint2), transparent 55%),
           {T['page_bg']};
       }}
       [data-testid="stHeader"] {{ background: transparent; }}
@@ -85,14 +147,14 @@ def inject_css():
     
       /* ── Sidebar — dark blue gradient, rounded, bordered ── */
       [data-testid="stSidebar"] {{
-        background: linear-gradient(185deg, #0b1830 0%, {T['sidebar_bg']} 100%);
+        background: linear-gradient(185deg, var(--sidebar1) 0%, var(--sidebar2) 100%);
         border-right: 1px solid {T['divider']};
       }}
       [data-testid="stSidebar"] > div:first-child {{
         padding-top: 10px;
         border-radius: 0 22px 22px 0;
       }}
-      [data-testid="stSidebar"] * {{ color: {T['text_primary']}; }}
+      [data-testid="stSidebar"] * {{ color: var(--sidebar-text); }}
       [data-testid="stSidebar"] h2 {{
         font-size: 1.15rem; font-weight: 800; letter-spacing: -0.01em;
         padding: 6px 4px 2px;
@@ -195,7 +257,7 @@ def inject_css():
         background: linear-gradient(180deg, #60a5fa, #7c3aed);
         box-shadow: 0 0 20px rgba(96,165,250,0.55); }}
       .dash-title {{ font-size: 2.8rem; font-weight: 800; letter-spacing: -0.03em; line-height: 1;
-        background: linear-gradient(96deg, #ffffff 0%, #d6e4ff 45%, #8fb3ec 100%);
+        background: var(--title-grad);
         -webkit-background-clip: text; background-clip: text;
         -webkit-text-fill-color: transparent; color: transparent; }}
       .dash-sub {{ color: {T['kpi_lbl']}; font-size: 0.92rem; margin-top: 9px;
@@ -205,7 +267,7 @@ def inject_css():
       .date-badge {{ display: inline-flex; align-items: center; gap: 8px; flex: 0 0 auto; white-space: nowrap;
         background: linear-gradient(160deg, rgba(96,165,250,0.14), rgba(124,58,237,0.10));
         border: 1px solid rgba(96,165,250,0.32); border-radius: 999px; padding: 10px 18px;
-        color: #dce8ff; font-weight: 700; font-size: 0.84rem; letter-spacing: 0.02em;
+        color: var(--text); font-weight: 700; font-size: 0.84rem; letter-spacing: 0.02em;
         box-shadow: 0 8px 24px rgba(8,20,46,0.45); }}
       .date-badge svg {{ width: 15px; height: 15px; stroke: #8fb3ec; fill: none; stroke-width: 2; }}
       .legend-pill {{ display: inline-flex; align-items: center; gap: 7px; padding: 5px 12px; margin-right: 9px;
@@ -235,7 +297,7 @@ def inject_css():
       /* ── Metric cards (glassy) ── */
       .metric-card {{
         position: relative; overflow: hidden;
-        background: linear-gradient(160deg, rgba(20,34,62,0.9), rgba(11,21,42,0.85));
+        background: var(--panel-grad);
         border: 1px solid {T['kpi_border']};
         border-radius: 18px; padding: 22px 22px 18px;
         box-shadow: inset 0 1px 0 rgba(255,255,255,0.03), 0 10px 30px rgba(0,0,0,0.25);
@@ -249,13 +311,13 @@ def inject_css():
       }}
       .metric-card.highlight {{
         border-color: rgba(124,58,237,0.6);
-        background: linear-gradient(160deg, rgba(38,29,74,0.92), rgba(16,20,52,0.9));
+        background: var(--hl-grad);
         box-shadow: 0 0 0 1px rgba(124,58,237,0.42), 0 0 42px rgba(124,58,237,0.28);
       }}
       .metric-card.highlight:hover {{ box-shadow: 0 0 0 1px rgba(124,58,237,0.6), 0 0 54px rgba(124,58,237,0.4); }}
       .metric-card.highlight.green {{
         border-color: rgba(34,197,94,0.6);
-        background: linear-gradient(160deg, rgba(20,60,40,0.92), rgba(14,30,28,0.9));
+        background: var(--hl-green-grad);
         box-shadow: 0 0 0 1px rgba(34,197,94,0.42), 0 0 42px rgba(34,197,94,0.28);
       }}
       .metric-card.highlight.green:hover {{ box-shadow: 0 0 0 1px rgba(34,197,94,0.6), 0 0 54px rgba(34,197,94,0.4); }}
@@ -274,7 +336,7 @@ def inject_css():
     
       /* ── Legacy KPI boxes (other pages) restyled to match ── */
       .kpi-box {{
-        background: linear-gradient(160deg, rgba(20,34,62,0.9), rgba(11,21,42,0.85));
+        background: var(--panel-grad);
         border-radius: 16px; padding: 20px 16px 16px; text-align: center;
         border: 1px solid {T['kpi_border']};
         transition: transform .2s ease, border-color .2s ease;
@@ -285,7 +347,7 @@ def inject_css():
       .section-divider {{ margin: 8px 0 20px; border-top: 1px solid {T['divider']}; }}
     
       .goal-kpi-box {{
-        background: linear-gradient(160deg, rgba(20,34,62,0.9), rgba(11,21,42,0.85));
+        background: var(--panel-grad);
         border-radius: 16px; padding: 24px 16px 20px; text-align: center;
         border: 1px solid {T['kpi_border']}; position: relative;
         transition: transform .2s ease, border-color .2s ease;
@@ -302,7 +364,7 @@ def inject_css():
     
       /* ── Glass panels (st.container(border=True)) ── */
       [data-testid="stVerticalBlockBorderWrapper"] {{
-        background: linear-gradient(160deg, rgba(16,28,52,0.78), rgba(10,18,38,0.72));
+        background: var(--panel-grad);
         border: 1px solid rgba(96,165,250,0.22) !important;
         border-radius: 20px !important;
         padding: 8px 14px 10px;
@@ -326,7 +388,7 @@ def inject_css():
       /* Book-age cards */
       .ba-card {{
         position: relative; overflow: hidden; height: 100%;
-        background: linear-gradient(160deg, rgba(20,34,62,0.9), rgba(11,21,42,0.85));
+        background: var(--panel-grad);
         border: 1px solid rgba(96,165,250,0.22); border-radius: 16px; padding: 16px 16px 14px;
         transition: transform .2s ease, border-color .2s ease, box-shadow .2s ease;
       }}
@@ -349,13 +411,13 @@ def inject_css():
         background: rgba(59,130,246,0.18); border: 1px solid rgba(96,165,250,0.4);
       }}
       .insight .in-icon svg {{ width: 18px; height: 18px; stroke: {ELEC}; fill: none; stroke-width: 2; }}
-      .insight .in-main {{ font-size: 0.95rem; font-weight: 700; color: #f1f5f9; }}
+      .insight .in-main {{ font-size: 0.95rem; font-weight: 700; color: var(--text); }}
       .insight .in-sub {{ font-size: 0.82rem; color: {T['kpi_lbl']}; margin-top: 3px; }}
     
       /* ── Stat cards (icon-left layout) ── */
       .stat-card {{
         display: flex; align-items: center; gap: 16px; height: 100%;
-        background: linear-gradient(160deg, rgba(20,34,62,0.9), rgba(11,21,42,0.85));
+        background: var(--panel-grad);
         border: 1px solid rgba(96,165,250,0.22); border-radius: 18px; padding: 20px 20px;
         transition: transform .2s ease, border-color .2s ease, box-shadow .2s ease;
       }}
@@ -401,7 +463,7 @@ def inject_css():
       /* ── Form inputs (number / date / text / select) — cohesive dark fields ── */
       [data-testid="stNumberInput"] div[data-baseweb="input"],
       [data-testid="stDateInput"] div[data-baseweb="input"] {{
-        background: rgba(15,23,42,0.6) !important;
+        background: var(--input-bg) !important;
         border: 1px solid rgba(96,165,250,0.22) !important;
         border-radius: 12px !important;
         overflow: hidden;
@@ -426,7 +488,7 @@ def inject_css():
       }}
       /* selectbox dropdowns */
       [data-testid="stSelectbox"] div[data-baseweb="select"] > div {{
-        background: rgba(15,23,42,0.6) !important;
+        background: var(--input-bg) !important;
         border: 1px solid rgba(96,165,250,0.22) !important;
         border-radius: 12px !important;
       }}
@@ -557,36 +619,36 @@ def chart_head(title, sub, icon_key):
 
 
 _DT_CSS = """<style>
-.dt-wrap{border:1px solid rgba(96,165,250,.16);border-radius:16px;background:#0b1322;
+.dt-wrap{border:1px solid var(--border);border-radius:16px;background:var(--dt-bg);
   overflow:hidden;margin:4px 0 6px;}
 .dt-scroll{overflow:auto;}
-table.dt{border-collapse:collapse;width:100%;font-size:.86rem;color:#dbe4f0;}
-table.dt thead th{position:sticky;top:0;z-index:1;background:#0e1830;color:#8aa2c4;font-weight:600;
-  font-size:.7rem;letter-spacing:.045em;text-transform:uppercase;text-align:left;padding:12px 16px;
-  border-bottom:1px solid rgba(96,165,250,.16);white-space:nowrap;}
+table.dt{border-collapse:collapse;width:100%;font-size:.86rem;color:var(--dt-text);}
+table.dt thead th{position:sticky;top:0;z-index:1;background:var(--dt-head);color:var(--dt-head-text);
+  font-weight:600;font-size:.7rem;letter-spacing:.045em;text-transform:uppercase;text-align:left;
+  padding:12px 16px;border-bottom:1px solid var(--border);white-space:nowrap;}
 table.dt th.r{text-align:right;} table.dt th.c{text-align:center;}
-table.dt tbody td{padding:11px 16px;border-bottom:1px solid rgba(96,165,250,.07);white-space:nowrap;}
+table.dt tbody td{padding:11px 16px;border-bottom:1px solid var(--dt-row);white-space:nowrap;}
 table.dt tbody tr:last-child td{border-bottom:none;}
-table.dt tbody tr:hover td{background:rgba(96,165,250,.06);}
+table.dt tbody tr:hover td{background:var(--dt-hover);}
 .dt-pill{display:inline-block;padding:2px 10px;border-radius:999px;font-size:.76rem;font-weight:600;
-  background:rgba(59,130,246,.16);color:#93c5fd;border:1px solid rgba(59,130,246,.30);}
+  background:var(--pill-bg);color:var(--pill-text);border:1px solid var(--pill-bd);}
 .dt-state{display:inline-block;padding:1px 8px;border-radius:6px;font-size:.72rem;font-weight:700;
-  background:rgba(96,165,250,.14);color:#bcd4f2;border:1px solid rgba(96,165,250,.24);}
+  background:var(--pill-bg);color:var(--pill-text);border:1px solid var(--pill-bd);}
 .dt-status{display:inline-flex;align-items:center;gap:6px;padding:2px 11px;border-radius:999px;
   font-size:.75rem;font-weight:600;}
 .dt-status::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor;flex:0 0 auto;}
-.dt-money{font-weight:700;color:#e8eef7;text-align:right;font-variant-numeric:tabular-nums;}
-.dt-num{color:#cdd9ea;text-align:right;font-variant-numeric:tabular-nums;}
-.dt-up{color:#4ade80;font-weight:700;text-align:right;font-variant-numeric:tabular-nums;}
-.dt-down{color:#f87171;font-weight:700;text-align:right;font-variant-numeric:tabular-nums;}
-.dt-days{font-weight:700;color:#f87171;font-variant-numeric:tabular-nums;}
-.dt-days.new{color:#4ade80;}
+.dt-money{font-weight:700;color:var(--text);text-align:right;font-variant-numeric:tabular-nums;}
+.dt-num{color:var(--dt-text);text-align:right;font-variant-numeric:tabular-nums;}
+.dt-up{color:var(--pos);font-weight:700;text-align:right;font-variant-numeric:tabular-nums;}
+.dt-down{color:var(--neg);font-weight:700;text-align:right;font-variant-numeric:tabular-nums;}
+.dt-days{font-weight:700;color:var(--neg);font-variant-numeric:tabular-nums;}
+.dt-days.new{color:var(--pos);}
 .dt-prod{display:inline-flex;align-items:center;gap:7px;}
-.dt-prod svg{width:15px;height:15px;stroke:#7c9cc4;fill:none;stroke-width:1.8;}
-.dt-muted{color:#7b91b3;}
+.dt-prod svg{width:15px;height:15px;stroke:var(--dt-head-text);fill:none;stroke-width:1.8;}
+.dt-muted{color:var(--dt-muted);}
 .dt-foot{display:flex;justify-content:space-between;align-items:center;padding:10px 16px;
-  font-size:.78rem;color:#7b91b3;border-top:1px solid rgba(96,165,250,.10);}
-.dt-empty{padding:22px 16px;color:#8aa2c4;font-size:.9rem;}
+  font-size:.78rem;color:var(--dt-muted);border-top:1px solid var(--border);}
+.dt-empty{padding:22px 16px;color:var(--dt-head-text);font-size:.9rem;}
 </style>"""
 
 _DT_EMOJI = _re.compile(r"[\U0001F534\U0001F7E1\U0001F7E0\U0001F7E2⚪\U0001F535]")

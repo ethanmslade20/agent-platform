@@ -254,26 +254,26 @@ _UPLOAD_CSS = """
   .up-hero-ic{width:58px;height:58px;border-radius:16px;display:flex;align-items:center;
     justify-content:center;flex:0 0 auto;background:linear-gradient(135deg,#3b82f6,#7c3aed);
     box-shadow:0 8px 26px rgba(124,58,237,.38);}
-  .up-hero-title{font-size:2rem;font-weight:800;color:#f8fafc;line-height:1.05;letter-spacing:-.01em;}
-  .up-hero-sub{font-size:.9rem;color:#8aacd6;margin-top:4px;max-width:640px;}
+  .up-hero-title{font-size:2rem;font-weight:800;color:var(--text);line-height:1.05;letter-spacing:-.01em;}
+  .up-hero-sub{font-size:.9rem;color:var(--text2);margin-top:4px;max-width:640px;}
   .up-sec{display:flex;align-items:center;gap:2px;margin:26px 0 2px;}
-  .up-sec-t{font-size:1.32rem;font-weight:800;color:#f2f5fb;}
-  .up-sec-tail{font-size:1.32rem;font-weight:400;color:#5f7aa3;}
+  .up-sec-t{font-size:1.32rem;font-weight:800;color:var(--text);}
+  .up-sec-tail{font-size:1.32rem;font-weight:400;color:var(--text3);}
   .up-pill{font-size:.6rem;font-weight:800;letter-spacing:.09em;padding:3px 9px;border-radius:999px;margin-left:10px;}
   .up-pill.req{background:rgba(59,130,246,.18);color:#7dd3fc;border:1px solid rgba(59,130,246,.42);}
-  .up-pill.opt{background:rgba(148,163,184,.14);color:#9fb2cc;border:1px solid rgba(148,163,184,.30);}
-  .up-sec-sub{font-size:.85rem;color:#7f97ba;margin:0 0 12px;max-width:760px;}
-  .up-card-h{display:flex;align-items:center;gap:9px;font-weight:700;color:#e7edf6;
+  .up-pill.opt{background:rgba(148,163,184,.14);color:var(--text2);border:1px solid rgba(148,163,184,.30);}
+  .up-sec-sub{font-size:.85rem;color:var(--text3);margin:0 0 12px;max-width:760px;}
+  .up-card-h{display:flex;align-items:center;gap:9px;font-weight:700;color:var(--text);
     font-size:.98rem;margin-bottom:8px;}
-  .up-status{font-size:.8rem;color:#6b84ad;margin-top:6px;}
+  .up-status{font-size:.8rem;color:var(--text3);margin-top:6px;}
   .up-status.ok{color:#22c55e;font-weight:600;}
   .up-foot{margin-top:28px;padding-top:14px;border-top:1px solid rgba(96,165,250,.14);
-    font-size:.82rem;color:#6b84ad;}
+    font-size:.82rem;color:var(--text3);}
   /* upload cards */
-  [class*="st-key-upcard_"]{background:#0c1424;border:1px solid rgba(96,165,250,.16)!important;
+  [class*="st-key-upcard_"]{background:var(--panel-solid);border:1px solid rgba(96,165,250,.16)!important;
     border-radius:16px!important;padding:16px 18px!important;}
   [class*="st-key-upcard_"] [data-testid="stFileUploaderDropzone"]{
-    background:#0a1120;border:1.5px dashed rgba(96,165,250,.30);border-radius:12px;}
+    background:var(--input-bg);border:1.5px dashed rgba(96,165,250,.30);border-radius:12px;}
 </style>
 """
 
@@ -712,13 +712,13 @@ _LOOKUP_CSS = """<style>
   .st-key-lookup_hero {max-width:620px;}
   .st-key-lookup_hero div[data-baseweb="select"] > div {
       font-size:1.08rem; padding:8px 12px; border-radius:14px;
-      background:rgba(15,23,42,.65); border:1.5px solid rgba(96,165,250,.4);
+      background:var(--input-bg); border:1.5px solid rgba(96,165,250,.4);
       box-shadow:0 6px 22px rgba(0,0,0,.3);}
   .st-key-lookup_hero div[data-baseweb="select"] > div > div:first-child,
   .st-key-lookup_hero div[data-baseweb="select"] > div > div:first-child > div {
-      color:#f8fafc !important; font-weight:700 !important; opacity:1 !important;}
+      color:var(--text) !important; font-weight:700 !important; opacity:1 !important;}
   .st-key-lookup_hero div[data-baseweb="select"] input {
-      color:#f8fafc !important; font-weight:600 !important; -webkit-text-fill-color:#f8fafc !important;}
+      color:var(--text) !important; font-weight:600 !important; -webkit-text-fill-color:var(--text) !important;}
 </style>"""
 
 
@@ -761,7 +761,7 @@ def page_client_lookup(tenant: dict, roster) -> None:
                if pid and pid.lower() not in ("nan", "none") else "")
     st.markdown(
         f"<div style='display:flex;align-items:center;gap:14px;margin:6px 0 2px;'>"
-        f"<span style='font-size:1.6rem;font-weight:800;color:#f8fafc;'>{person}</span>"
+        f"<span style='font-size:1.6rem;font-weight:800;color:var(--text);'>{person}</span>"
         f"<span style='background:{pill_bg};color:{pill_tx};padding:3px 12px;border-radius:999px;"
         f"font-size:.8rem;font-weight:700;'>{r.get('status', '?')}</span></div>"
         f"<div style='color:#94a3b8;font-size:.95rem;margin-bottom:10px;'>"
@@ -1064,7 +1064,7 @@ _G_CAL = ("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0
 _GOALS_CSS = f"""
 <style>
   .st-key-goal_card_members, .st-key-goal_card_date {{
-    position:relative; border-radius:20px; background:#0c1424;
+    position:relative; border-radius:20px; background:var(--panel-solid);
     padding:30px 30px 30px 112px; min-height:132px; justify-content:center;
   }}
   .st-key-goal_card_members {{ box-shadow:0 0 24px rgba(139,92,246,.16); }}
@@ -1083,14 +1083,14 @@ _GOALS_CSS = f"""
   }}
   .st-key-goal_card_members::after, .st-key-goal_card_date::after {{
     content:""; position:absolute; left:28px; top:50%; transform:translateY(-50%);
-    width:56px; height:56px; border-radius:16px; background-color:#161f38;
+    width:56px; height:56px; border-radius:16px; background-color:var(--panel-solid);
     background-repeat:no-repeat; background-position:center; background-size:28px 28px;
     box-shadow:inset 0 0 0 1px rgba(139,92,246,.28); pointer-events:none;
   }}
   .st-key-goal_card_members::after {{ background-image:url("{_G_USERS}"); }}
   .st-key-goal_card_date::after    {{ background-image:url("{_G_CAL}"); }}
   .st-key-goal_card_members [data-testid="stWidgetLabel"] p,
-  .st-key-goal_card_date [data-testid="stWidgetLabel"] p {{ font-size:.85rem !important; color:#8aacd6 !important; }}
+  .st-key-goal_card_date [data-testid="stWidgetLabel"] p {{ font-size:.85rem !important; color:var(--text2) !important; }}
   .st-key-goal_card_members [data-testid="stNumberInputContainer"],
   .st-key-goal_card_members div[data-baseweb="input"],
   .st-key-goal_card_members div[data-baseweb="input"] > div,
@@ -1101,18 +1101,18 @@ _GOALS_CSS = f"""
     background:transparent !important; border:none !important; box-shadow:none !important;
   }}
   .st-key-goal_card_members input, .st-key-goal_card_date input {{
-    font-size:1.9rem !important; font-weight:700 !important; color:#f2f5fb !important;
+    font-size:1.9rem !important; font-weight:700 !important; color:var(--text) !important;
     background:transparent !important; padding-left:0 !important;
   }}
   .st-key-goal_card_members button[data-testid*="StepDown"],
   .st-key-goal_card_members button[data-testid*="StepUp"] {{
     background:transparent !important; border-radius:0 !important;
-    border-left:1px solid rgba(138,172,214,.18) !important; width:54px !important; color:#e8edf5 !important;
+    border-left:1px solid rgba(138,172,214,.18) !important; width:54px !important; color:var(--text) !important;
   }}
   .st-key-goal_card_members button[data-testid*="StepDown"]:hover,
   .st-key-goal_card_members button[data-testid*="StepUp"]:hover {{ background:rgba(139,92,246,.12) !important; }}
   .goal-kpi-box {{
-    background:#0c1424; border:1px solid rgba(96,165,250,0.16); border-radius:16px;
+    background:var(--panel-solid); border:1px solid rgba(96,165,250,0.16); border-radius:16px;
     padding:22px 20px 18px; height:100%; transition:transform .15s ease, border-color .15s ease;
   }}
   .goal-kpi-box:hover {{ transform:translateY(-2px); border-color:rgba(96,165,250,0.5); }}
@@ -1120,8 +1120,8 @@ _GOALS_CSS = f"""
   .goal-kpi-value.green {{ color:#22c55e; }}
   .goal-kpi-value.gold  {{ color:#f59e0b; }}
   .goal-kpi-value.red   {{ color:#ef4444; }}
-  .goal-kpi-label {{ font-size:.72rem; color:#8aacd6; margin-top:6px; text-transform:uppercase; letter-spacing:.06em; }}
-  .goal-kpi-sub {{ font-size:.82rem; color:#8aacd6; margin-top:4px; }}
+  .goal-kpi-label {{ font-size:.72rem; color:var(--text2); margin-top:6px; text-transform:uppercase; letter-spacing:.06em; }}
+  .goal-kpi-sub {{ font-size:.82rem; color:var(--text2); margin-top:4px; }}
 </style>
 """
 
@@ -1168,8 +1168,8 @@ def page_goals(tenant: dict, roster) -> None:
     avg_hh = d["household"] or 1.0
     goal_policies = round(GOAL / max(avg_hh, 1))
     st.markdown(
-        f'<p style="color:#8aacd6;font-size:0.95rem;margin-top:-6px;">'
-        f'<b style="color:#e8edf5">{GOAL:,} members</b> ≈ '
+        f'<p style="color:var(--text2);font-size:0.95rem;margin-top:-6px;">'
+        f'<b style="color:var(--text)">{GOAL:,} members</b> ≈ '
         f'<b style="color:#4285F4">{goal_policies:,} policies</b> '
         f'(based on your avg household size of {avg_hh:.2f})</p>', unsafe_allow_html=True)
     st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
@@ -1206,7 +1206,7 @@ def page_goals(tenant: dict, roster) -> None:
     on_track = projected >= GOAL
 
     st.markdown(
-        f'<p style="color:#8aacd6;font-size:0.95rem;">LTV: all-time churn '
+        f'<p style="color:var(--text2);font-size:0.95rem;">LTV: all-time churn '
         f'({churn_rate*100:.2f}%/mo → {implied_tenure:.0f}-mo tenure → '
         f'<b style="color:#2ecc71">${ltv_per:,}/member</b>)</p>', unsafe_allow_html=True)
 
@@ -1215,12 +1215,12 @@ def page_goals(tenant: dict, roster) -> None:
     bar_c = "#2ecc71" if pct_done >= 75 else ("#f39c12" if pct_done >= 40 else "#4285F4")
     rev_c = "#2ecc71" if rev_pct >= 75 else ("#f39c12" if rev_pct >= 40 else "#4285F4")
     st.markdown(f"""
-      <div style="margin-bottom:4px;display:flex;justify-content:space-between;font-size:0.85rem;color:#8aacd6;">
+      <div style="margin-bottom:4px;display:flex;justify-content:space-between;font-size:0.85rem;color:var(--text2);">
         <span>Members &nbsp;<b style="color:#fff">{current:,}</b></span>
         <span><b style="color:#fff">{pct_done:.1f}%</b> of {GOAL:,}</span>
         <span><b>{gap:,} to go &nbsp;·&nbsp; {days_left:,} days left</b></span></div>
       <div class="progress-wrap" style="margin-bottom:14px;"><div class="progress-bar" style="width:{pct_done:.1f}%;background:{bar_c};"></div></div>
-      <div style="margin-bottom:4px;display:flex;justify-content:space-between;font-size:0.85rem;color:#8aacd6;">
+      <div style="margin-bottom:4px;display:flex;justify-content:space-between;font-size:0.85rem;color:var(--text2);">
         <span>Annual Revenue &nbsp;<b style="color:#fff">${current_arr:,.0f}</b></span>
         <span><b style="color:#fff">{rev_pct:.1f}%</b> of ${goal_arr:,.0f}</span>
         <span><b>${revenue_gap_arr:,.0f} ARR to go</b></span></div>
@@ -1298,9 +1298,9 @@ def page_goals(tenant: dict, roster) -> None:
         f'<div style="background:linear-gradient(90deg,rgba(245,158,11,0.13),rgba(245,158,11,0.04));'
         f'border:1px solid rgba(245,158,11,0.4);border-left:4px solid {ui.GOLD};padding:16px 20px;'
         f'border-radius:14px;margin-bottom:20px;">'
-        f'<div style="font-size:0.78rem;color:#8aacd6;text-transform:uppercase;letter-spacing:0.08em;font-weight:600;">This week\'s target</div>'
+        f'<div style="font-size:0.78rem;color:var(--text2);text-transform:uppercase;letter-spacing:0.08em;font-weight:600;">This week\'s target</div>'
         f'<div style="font-size:1.9rem;font-weight:800;color:{ui.GOLD};margin-top:4px;">+{needed_per_week:.0f} members</div>'
-        f'<div style="font-size:0.9rem;color:#8aacd6;margin-top:3px;">≈ {week_pol} policies &nbsp;·&nbsp; '
+        f'<div style="font-size:0.9rem;color:var(--text2);margin-top:3px;">≈ {week_pol} policies &nbsp;·&nbsp; '
         f'{weeks_left:.0f} weeks remaining to reach {GOAL:,} members by {GOAL_DATE.strftime("%b %d, %Y")}</div></div>',
         unsafe_allow_html=True)
 
@@ -1407,29 +1407,29 @@ _SETTINGS_CSS = """<style>
   .set-badge{width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;
      background:rgba(96,165,250,.14);border:1px solid rgba(96,165,250,.30);flex:none;}
   .set-badge svg{width:20px;height:20px;stroke:#93c5fd;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
-  .set-h .t{font-size:1.15rem;font-weight:800;color:#f1f5f9;line-height:1.15;}
-  .set-h .s{font-size:.85rem;color:#8aacd6;}
-  .set-sub{font-size:.8rem;color:#7c8aa5;margin-top:-6px;}
-  .set-chip{background:rgba(15,23,42,.6);border:1px solid rgba(96,165,250,.25);border-radius:14px;
+  .set-h .t{font-size:1.15rem;font-weight:800;color:var(--text);line-height:1.15;}
+  .set-h .s{font-size:.85rem;color:var(--text2);}
+  .set-sub{font-size:.8rem;color:var(--text3);margin-top:-6px;}
+  .set-chip{background:var(--input-bg);border:1px solid rgba(96,165,250,.25);border-radius:14px;
      padding:8px 16px;display:flex;align-items:center;gap:12px;}
   .set-chip svg{width:22px;height:22px;stroke:#93c5fd;fill:none;stroke-width:2;}
   .set-chip .n{font-size:1.45rem;font-weight:800;color:#fff;line-height:1;}
-  .set-chip .l{font-size:.7rem;color:#8aacd6;text-transform:uppercase;letter-spacing:.05em;}
+  .set-chip .l{font-size:.7rem;color:var(--text2);text-transform:uppercase;letter-spacing:.05em;}
   /* state list buttons → cards with a chevron */
   .st-key-statelist [data-testid="stButton"] button{width:100%;justify-content:flex-start;text-align:left;
      border-radius:12px;padding:12px 34px 12px 14px;border:1px solid rgba(96,165,250,.18);
-     background:rgba(15,23,42,.5);font-weight:600;position:relative;white-space:pre-line;line-height:1.35;}
+     background:var(--input-bg);font-weight:600;position:relative;white-space:pre-line;line-height:1.35;}
   .st-key-statelist [data-testid="stButton"] button::after{content:"›";position:absolute;right:14px;top:50%;
      transform:translateY(-50%);color:#64748b;font-size:1.25rem;}
   /* carrier checkbox grid → selectable cards */
   .st-key-carriergrid [data-testid="stCheckbox"]{border:1px solid rgba(96,165,250,.18);border-radius:10px;
-     padding:11px 13px;background:rgba(15,23,42,.5);transition:border-color .12s,background .12s;}
+     padding:11px 13px;background:var(--input-bg);transition:border-color .12s,background .12s;}
   .st-key-carriergrid [data-testid="stCheckbox"]:hover{border-color:rgba(96,165,250,.45);}
   .st-key-carriergrid [data-testid="stCheckbox"]:has(input:checked){border-color:#3b82f6;background:rgba(59,130,246,.14);}
   .st-key-carriergrid [data-testid="stCheckbox"] label{width:100%;}
   .set-footer{background:rgba(34,197,94,.10);border:1px solid rgba(34,197,94,.30);border-radius:10px;
      padding:10px 14px;display:flex;justify-content:space-between;align-items:center;margin-top:10px;
-     font-size:.85rem;color:#cbd5e1;}
+     font-size:.85rem;color:var(--text);}
   /* Save Changes — blue→purple gradient like the sign-in button */
   .st-key-savebar [data-testid="stButton"] button{
      background:linear-gradient(90deg,#3b82f6 0%,#7c3aed 100%) !important;border:none !important;
@@ -1472,7 +1472,7 @@ def page_settings(tenant: dict, roster) -> None:
             st.text_input("National Producer Number (NPN)", value=tenant.get("npn", ""), key="set_npn")
             st.markdown('<div class="set-sub">Your NPN keeps your book scoped to you.</div>',
                         unsafe_allow_html=True)
-        st.markdown('<div class="set-sub" style="margin-top:16px;font-weight:700;color:#cbd5e1;'
+        st.markdown('<div class="set-sub" style="margin-top:16px;font-weight:700;color:var(--text);'
                     'text-transform:uppercase;letter-spacing:.05em;">Change password</div>',
                     unsafe_allow_html=True)
         pw1, pw2, pw3 = st.columns(3)
@@ -1578,7 +1578,7 @@ def page_settings(tenant: dict, roster) -> None:
     # ── Save bar (profile) ──────────────────────────────────────────────────────
     sb1, sb2 = st.columns([3, 1])
     sb1.markdown('<div style="display:flex;align-items:center;gap:8px;color:#4ade80;font-weight:600;">'
-                 '✓ All changes saved <span style="color:#7c8aa5;font-weight:400;">· '
+                 '✓ All changes saved <span style="color:var(--text3);font-weight:400;">· '
                  'Carrier changes save instantly.</span></div>', unsafe_allow_html=True)
     with sb2, st.container(key="savebar"):
         _save_clicked = st.button("💾  Save Changes", type="primary", use_container_width=True)
@@ -1923,7 +1923,7 @@ def _nav_css() -> None:
     for i, title in [(1, "OVERVIEW"), (5, "CLIENTS"), (8, "MONEY"), (10, "FOLLOW UPS")]:
         css.append(f'{sb}:nth-of-type({i}){{margin-top:{12 if i == 1 else 22}px;position:relative;overflow:visible;}}')
         css.append(f'{sb}:nth-of-type({i})::after{{content:"{title}";position:absolute;top:-15px;left:10px;'
-                   f'font-size:.64rem;letter-spacing:.13em;color:#6b84ad;font-weight:700;}}')
+                   f'font-size:.64rem;letter-spacing:.13em;color:var(--text3);font-weight:700;}}')
     css.append(f'{sb}:nth-of-type(14){{margin-top:26px;border-top:1px solid rgba(96,165,250,0.18);padding-top:12px;}}')
     st.markdown(f"<style>{''.join(css)}</style>", unsafe_allow_html=True)
 
@@ -1945,6 +1945,12 @@ def workspace() -> None:
             st.session_state["nav"] = st.session_state.pop("_pending_nav")
         page = st.radio("Go to", _NAV, key="nav", label_visibility="collapsed")
         st.divider()
+        _light = st.toggle("☀️  Light mode", value=st.session_state.get("agent_theme") == "light",
+                           key="theme_toggle")
+        _want = "light" if _light else "dark"
+        if _want != st.session_state.get("agent_theme", "dark"):
+            st.session_state["agent_theme"] = _want
+            st.rerun()
         if st.button("🔄  Refresh data", use_container_width=True,
                      help="Re-pull your latest data and redraw — without signing out."):
             from core import store
