@@ -130,7 +130,36 @@ def theme_root_css(theme: str) -> str:
                "[data-baseweb='popover'] [role='option']:hover,"
                "[data-baseweb='popover'] [role='option'][aria-selected='true'],"
                "[data-baseweb='popover'] li:hover,[data-baseweb='menu'] li:hover"
-               "{background:#eaf2ff !important;color:#0f172a !important;}")
+               "{background:#eaf2ff !important;color:#0f172a !important;}"
+               # ── Native Streamlit widgets keep the dark base theme even in light
+               #    mode (config base is "dark"), so repaint them for light here. ──
+               # File uploaders (drop zone + "Browse files" button)
+               "[data-testid='stFileUploaderDropzone']{background:#f8fafc !important;"
+               "border:1.5px dashed #cbd5e1 !important;}"
+               "[data-testid='stFileUploaderDropzone'] *{color:#334155 !important;}"
+               "[data-testid='stFileUploaderDropzone'] small{color:#64748b !important;}"
+               "[data-testid='stFileUploaderDropzone'] button{background:#ffffff !important;"
+               "color:#0f172a !important;border:1px solid #cbd5e1 !important;}"
+               # Text inputs (search boxes, settings, mapping)
+               "[data-testid='stTextInput'] [data-baseweb='input']{background:#ffffff !important;"
+               "border:1px solid #cbd5e1 !important;}"
+               "[data-testid='stTextInput'] input{background:#ffffff !important;color:#0f172a !important;"
+               "-webkit-text-fill-color:#0f172a !important;caret-color:#0f172a !important;}"
+               "[data-testid='stTextInput'] input::placeholder{color:#94a3b8 !important;"
+               "-webkit-text-fill-color:#94a3b8 !important;}"
+               # Expander headers ("Add a commission statement", "View duplicates")
+               "[data-testid='stExpander'] details{border:1px solid #e2e8f0 !important;"
+               "background:#ffffff !important;}"
+               "[data-testid='stExpander'] summary{background:#f1f5f9 !important;}"
+               "[data-testid='stExpander'] summary *{color:#0f172a !important;}"
+               # Progress bar track (AEP renewal progress) — the visible track sits two
+               # levels under [role=progressbar]; the blue fill is one level deeper (kept).
+               "[data-testid='stProgress'] div[role='progressbar'],"
+               "[data-testid='stProgress'] div[role='progressbar'] > div > div{"
+               "background-color:#e2e8f0 !important;}")
+    # NOTE: st.data_editor / st.dataframe are canvas (glide-data-grid) widgets whose
+    # colors follow the config [theme] base only — CSS/--gdg-* vars are ignored at
+    # runtime, so those grids render dark in both themes. Left as-is by design.
     return f"<style>:root{{{root}}}{fix}</style>"
 
 ICONS = {
