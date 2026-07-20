@@ -43,6 +43,16 @@ st.markdown(
       [data-testid="stDecoration"], [data-testid="stStatusWidget"],
       [data-testid="stAppDeployButton"], [data-testid="stMainMenu"], #MainMenu, footer {display:none !important;}
       header[data-testid="stHeader"]{background:transparent !important;}
+      /* the sidebar reopen control (shows when collapsed) — make it on-brand, not a
+         washed-out grey box. NB: stExpandSidebarButton IS the <button>; its children
+         are just the icon spans. */
+      [data-testid="stExpandSidebarButton"]{
+        background:var(--sidebar-tile) !important; border:1px solid var(--border) !important;
+        border-radius:10px !important;}
+      [data-testid="stExpandSidebarButton"]:hover{
+        background:var(--hover) !important; border-color:var(--accent-blue) !important;}
+      [data-testid="stExpandSidebarButton"] span, [data-testid="stExpandSidebarButton"] svg{
+        color:var(--accent-blue) !important; fill:var(--accent-blue) !important;}
       /* Primary (blue) buttons: force a white label on every page/theme. Otherwise
          the light-mode markdown rules paint the label dark → unreadable on blue. */
       button[kind="primary"], button[kind="primaryFormSubmit"],
