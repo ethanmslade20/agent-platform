@@ -1108,7 +1108,7 @@ def page_commissions(tenant: dict, roster) -> None:
                 if bm.empty:
                     st.caption("Map a payment-date column to see the monthly trend.")
                 else:
-                    st.bar_chart(bm.set_index("Month")["Paid"], color="#22c55e", height=300)
+                    ui.show_chart(charts.paid_by_month_fig(bm))
         st.caption("Money Received comes straight from your uploaded statements. "
                    "Re-uploading the same file replaces its rows (no double-counting).")
 

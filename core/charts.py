@@ -186,6 +186,23 @@ def goal_growth_figs(hist, pace_df, goal, goal_arr, today):
     return fm, fr
 
 
+def paid_by_month_fig(bm: pd.DataFrame):
+    """Commission received per month — green bars. Plotly (not st.bar_chart) so the
+    app never imports altair, which breaks on bleeding-edge Python on the host."""
+    df = bm.copy()
+    fig = px.bar(df, x="Month", y="Paid", text="Paid")
+    fig.update_traces(marker_color=GREEN, marker_cornerradius=6, textposition="outside",
+                      texttemplate="$%{y:,.0f}", textfont=dict(size=11, color="#cbd5e1"),
+                      hovertemplate="%{x}: $%{y:,.2f}<extra></extra>")
+    fig.update_layout(**ui._chart_layout(
+        showlegend=False, height=300,
+        xaxis=dict(title="", showgrid=False, tickangle=-45 if len(df) > 4 else 0,
+                   tickfont=dict(size=11)),
+        yaxis=dict(title="", gridcolor="rgba(96,165,250,0.10)", tickprefix="$", tickformat=",.0f"),
+        margin=dict(t=20, b=44, l=10, r=10)))
+    return fig
+
+
 def daily_new_fig(roster: pd.DataFrame):
     col = "submission_date" if "submission_date" in roster.columns else "effective_date"
     if col not in roster.columns:
