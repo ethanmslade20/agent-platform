@@ -34,11 +34,13 @@ st.markdown(
     <style>
       [data-testid="stSidebarNav"]{display:none}
       /* Hide Streamlit's in-app chrome on EVERY page so the product reads clean for
-         end users: the top-right toolbar / Deploy button / ⋮ menu, and the footer
-         "Hosted with Streamlit" badge. (The Cloud owner's Share/Manage-app controls
-         are platform chrome outside the app and are only shown to the logged-in
-         owner — regular visitors never see them.) */
-      [data-testid="stToolbar"], [data-testid="stDecoration"], [data-testid="stStatusWidget"],
+         end users: the Deploy button, the ⋮ menu, the status widget, and the footer
+         "Hosted with Streamlit" badge. NOTE: hide only these specific buttons — NOT
+         the whole stToolbar, because the sidebar's reopen control (stExpandSidebarButton)
+         lives inside the toolbar; hiding the toolbar trapped a collapsed sidebar with
+         no way to reopen it. (The Cloud owner's Share/Manage-app controls are platform
+         chrome outside the app, shown only to the logged-in owner — visitors never see them.) */
+      [data-testid="stDecoration"], [data-testid="stStatusWidget"],
       [data-testid="stAppDeployButton"], [data-testid="stMainMenu"], #MainMenu, footer {display:none !important;}
       header[data-testid="stHeader"]{background:transparent !important;}
       /* Primary (blue) buttons: force a white label on every page/theme. Otherwise
