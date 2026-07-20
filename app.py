@@ -1903,12 +1903,10 @@ def page_aor(tenant: dict, roster) -> None:
 
     taken = views.aor_taken(roster, tenant.get("npn", ""), tenant.get("name", "")).copy()
     members = pd.to_numeric(taken.get("applicant_count"), errors="coerce").fillna(1).clip(lower=1)
-    stake = int(members.sum()) * 23 * 12
 
     _cards([
         ui.stat_card("Taken by Another Agent", f"{len(taken):,}", "minus", ui.RED),
         ui.stat_card("Members at Risk", f"{int(members.sum()):,}", "users", ui.ELEC),
-        ui.stat_card("$/yr at Stake", f"${stake:,}", "dollar", ui.GREEN),
     ])
     st.markdown("<br>", unsafe_allow_html=True)
 
@@ -1921,7 +1919,6 @@ def page_aor(tenant: dict, roster) -> None:
         else:
             t = taken.copy()
             t["_mem"] = members.values
-            t["Est $/yr"] = (t["_mem"] * 23 * 12).map(lambda v: f"${v:,.0f}")
             # The HealthSherpa export doesn't say WHEN an AOR change happened, so we
             # can't show a true "days gone". Instead we count from when the agent
             # first flagged the steal (first upload = "New"). That's honest and makes
@@ -1943,7 +1940,6 @@ def page_aor(tenant: dict, roster) -> None:
                 "Carrier": t.get("carrier", ""),
                 "State": t.get("state", ""),
                 "Members": t["_mem"].astype(int),
-                "Est $/yr": t["Est $/yr"],
                 "Phone": t.get("phone", ""),
             })
             ui.styled_table(show, height=min(46 + 35 * max(len(show), 1), 560), bare=True)
