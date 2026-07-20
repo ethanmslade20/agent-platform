@@ -532,35 +532,8 @@ def page_updates(tenant: dict, roster) -> None:
         st.info("No updates yet — upload a HealthSherpa export and your summary shows up here.", icon="📥")
         return
 
-    real = [e for e in hist if not e.get("first")]
-    signed_tot = sum(int(e.get("signed", 0) or 0) for e in real)
-    mem_tot = sum(int(e.get("members", 0) or 0) for e in real)
-    cx_tot = sum(len(_bu_cx_names(e)) for e in real)
-    ar_tot = sum(len(e.get("taken", [])) for e in real)
-    wb_tot = sum(len(e.get("won", [])) for e in real)
-    total_updates = signed_tot + cx_tot + ar_tot + wb_tot
-
-    st.markdown(
-        '<div class="bu-summary">'
-        + f'<div class="bu-sc sg"><div class="bu-sc-ic">{_BU_CHECK}</div><div style="min-width:0">'
-          f'<div class="bu-sc-l">Signed</div><div class="bu-sc-v">{signed_tot:,}</div>'
-          f'<div class="bu-sc-d">new policies / {mem_tot:,} members</div></div></div>'
-        + f'<div class="bu-sc cx"><div class="bu-sc-ic">{_BU_X}</div><div style="min-width:0">'
-          f'<div class="bu-sc-l">Cancelled</div><div class="bu-sc-v">{cx_tot:,}</div>'
-          f'<div class="bu-sc-d">policies (Re-Engage)</div></div></div>'
-        + f'<div class="bu-sc ar"><div class="bu-sc-ic">{_BU_AOR}</div><div style="min-width:0">'
-          f'<div class="bu-sc-l">AOR Taken</div><div class="bu-sc-v">{ar_tot:,}</div>'
-          f'<div class="bu-sc-d">taken by another agent</div></div></div>'
-        + f'<div class="bu-sc wb"><div class="bu-sc-ic">{_BU_STAR}</div><div style="min-width:0">'
-          f'<div class="bu-sc-l">Won Back</div><div class="bu-sc-v">{wb_tot:,}</div>'
-          f'<div class="bu-sc-d">policies</div></div></div>'
-        + f'<div class="bu-sc up"><div class="bu-sc-ic">{_BU_FILE}</div><div style="min-width:0">'
-          f'<div class="bu-sc-l">Total Updates</div><div class="bu-sc-v">{total_updates:,}</div>'
-          f'<div class="bu-sc-d">across all uploads</div></div></div>'
-        + '</div>', unsafe_allow_html=True)
-
     cards = []
-    for e in reversed(hist):  # latest upload first
+    for e in hist:  # history is stored newest-first (log.insert(0, ...))
         hd = f'<div class="bu-hd"><span class="bu-hd-t">📘 Book updated · {_bu_esc(e.get("date", ""))}</span></div>'
         if e.get("first"):
             body = ('<div class="bu-baseline">' + _BU_INFO
