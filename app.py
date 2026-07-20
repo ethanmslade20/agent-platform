@@ -1525,26 +1525,57 @@ def page_aep(tenant: dict, roster) -> None:
     st.progress(done / len(df) if len(df) else 0.0,
                 text=f"{done:,} of {len(df):,} renewed ({round(done / len(df) * 100) if len(df) else 0}%)")
 
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # ── Filters (mirror the Client Roster) ──────────────────────────────────────
+    f1, f2 = st.columns([2, 3])
+    present = [s for s in _AEP_STATUSES if bool((df["Status"] == s).any())]
+    sel = f1.selectbox("Status", ["All"] + present, key="aep_fstatus")
+    q = f2.text_input("Search by name", placeholder="First or last name…", key="aep_fsearch")
+    view = df
+    if sel != "All":
+        view = view[view["Status"] == sel]
+    if q.strip():
+        view = view[view["Client"].str.contains(q.strip(), case=False, regex=False)]
+
+    # ── Roster-vibe table: read-only view of everyone's current status ──────────
+    # This is the same styled_table the Book of Business roster uses (carrier/state
+    # pills, colored status pills, styled header) — the "vibe" the page is matching.
+    with st.container(border=True):
+        st.markdown(ui.chart_head("Client Renewal Tracker",
+                                  f"{len(view):,} of {len(df):,} clients shown", "users"),
+                    unsafe_allow_html=True)
+        ui.styled_table(view[["Client", "Carrier", "State", "Status", "Notes"]],
+                        height=560, bare=True, empty="No clients match this view.")
+
+    # ── Editor: bulk inline edit for the clients currently in view ──────────────
+    # The canvas data-editor can't be styled like the roster, so it lives behind an
+    # "Edit" affordance; the pretty table above is what the page leads with.
     st.markdown("<style>.st-key-aepgrid [data-testid='stDataFrame'],"
                 ".st-key-aepgrid [data-testid='stDataFrameResizable']{border:none !important;"
                 "border-radius:12px;overflow:hidden;}</style>", unsafe_allow_html=True)
-    with st.container(border=True, key="aepgrid"):
-        st.markdown(ui.chart_head("Client Renewal Tracker",
-                                  "Set each client's status and add notes, then hit Save", "users"),
-                    unsafe_allow_html=True)
-        edited = st.data_editor(
-            df.drop(columns=["_key"]), hide_index=True, use_container_width=True, height=460,
-            disabled=["Client", "Carrier", "State"], key="aep_editor",
-            column_config={"Status": st.column_config.SelectboxColumn("Status", options=_AEP_STATUSES, width="small")})
-
-    if st.button("Save statuses", type="primary"):
-        out = {}
-        for i in range(len(edited)):
-            out[df.iloc[i]["_key"]] = {"status": edited.iloc[i]["Status"],
-                                       "notes": str(edited.iloc[i].get("Notes", "") or "")}
-        settings.save(agent_id, {**cfg, "aep": out})
-        st.success("Statuses saved.")
-        st.rerun()
+    with st.expander("✏️  Edit statuses & notes", expanded=False):
+        st.caption("Set a status and jot notes for each client in view, then Save. "
+                   "Filters above narrow what you edit here.")
+        ev = view.reset_index(drop=True)
+        with st.container(key="aepgrid"):
+            edited = st.data_editor(
+                ev.drop(columns=["_key"]), hide_index=True, use_container_width=True, height=460,
+                disabled=["Client", "Carrier", "State"],
+                key=f"aep_editor|{sel}|{q.strip().lower()}",
+                column_config={"Status": st.column_config.SelectboxColumn(
+                    "Status", options=_AEP_STATUSES, width="small")})
+        if st.button("Save statuses", type="primary"):
+            # Start from the full current state so clients hidden by the filter keep
+            # their saved status, then overwrite the rows that were on screen.
+            out = {r["_key"]: {"status": r["Status"], "notes": str(r["Notes"] or "")}
+                   for _, r in df.iterrows()}
+            for i in range(len(edited)):
+                out[ev.iloc[i]["_key"]] = {"status": edited.iloc[i]["Status"],
+                                           "notes": str(edited.iloc[i].get("Notes", "") or "")}
+            settings.save(agent_id, {**cfg, "aep": out})
+            st.success("Statuses saved.")
+            st.rerun()
 
 
 _US_STATES = ["AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "FL", "GA", "HI", "IA", "ID",

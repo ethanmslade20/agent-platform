@@ -772,14 +772,16 @@ _SHIELD = ('<svg viewBox="0 0 24 24"><path d="M12 2l8 4v6c0 5-3.5 8.5-8 10-4.5-1
 def _dt_pill_color(v):
     s = str(v).lower()
     if "\U0001F534" in s or any(k in s for k in ("cancel", "lapse", "taken", "expired", "terminat",
-            "overdue", "past due", "inactive", "never paid", "stopped", "<30", "at risk")):
+            "overdue", "past due", "inactive", "never paid", "stopped", "<30", "at risk", "lost")):
         return "#f87171", "rgba(239,68,68,.13)", "rgba(239,68,68,.30)"
     if any(e in s for e in ("\U0001F7E1", "\U0001F7E0")) or any(k in s for k in ("pending", "open",
-            "follow", "binder", "grace", "disconnect", "30–60", "60–90", "30-60", "60-90", "due")):
+            "follow", "binder", "grace", "disconnect", "30–60", "60–90", "30-60", "60-90", "due",
+            "contacted", "worked", "in progress", "working")):
         return "#fbbf24", "rgba(245,158,11,.13)", "rgba(245,158,11,.30)"
-    if any(k in s for k in ("paid", "active", "effectuat", "enrolled", "current", "matches", "reconnect")):
+    if any(k in s for k in ("paid", "active", "effectuat", "enrolled", "current", "matches",
+            "reconnect", "renew")):
         return "#4ade80", "rgba(34,197,94,.13)", "rgba(34,197,94,.30)"
-    if "⚪" in s or "90+" in s or "unknown" in s:
+    if "⚪" in s or "90+" in s or "unknown" in s or "not started" in s or "not-started" in s:
         return "#94a3b8", "rgba(148,163,184,.12)", "rgba(148,163,184,.26)"
     return "#93c5fd", "rgba(59,130,246,.13)", "rgba(59,130,246,.28)"
 
