@@ -2078,6 +2078,53 @@ def _nav_css() -> None:
     st.markdown(f"<style>{''.join(css)}</style>", unsafe_allow_html=True)
 
 
+def _footer_css() -> None:
+    """Settings footer: a header + three cards (theme toggle, Refresh, Log out).
+
+    Icons are CSS masks tinted with theme vars so they track light/dark. The
+    interactive widgets are real Streamlit widgets wrapped in keyed containers
+    (.st-key-sb_theme / sb_refresh / sb_logout) that we repaint as cards.
+    """
+    ss = 'section[data-testid="stSidebar"]'
+    gear, sun = _nav_icon_uri("gear"), _nav_icon_uri("sun")
+    refresh, logout = _nav_icon_uri("refresh"), _nav_icon_uri("logout")
+    st.markdown(f"""<style>
+    {ss} .sb-set-hdr{{display:flex;align-items:center;gap:8px;border-top:1px solid var(--divider);
+      margin:8px 2px 12px;padding-top:14px;font-size:1rem;font-weight:800;color:var(--text);}}
+    {ss} .sb-set-hdr .ico{{width:18px;height:18px;flex:0 0 auto;background:var(--text2);
+      -webkit-mask:url("{gear}") center/contain no-repeat;mask:url("{gear}") center/contain no-repeat;}}
+    /* shared card frame */
+    {ss} .st-key-sb_theme,
+    {ss} .st-key-sb_refresh button,
+    {ss} .st-key-sb_logout button{{
+      background:var(--panel-solid) !important;border:1.5px solid var(--border) !important;
+      border-radius:14px !important;box-shadow:var(--card-shadow) !important;}}
+    /* theme toggle: sun icon + label on the left, switch on the right */
+    {ss} .st-key-sb_theme{{padding:11px 14px !important;margin-bottom:11px;}}
+    {ss} .st-key-sb_theme label{{flex-direction:row-reverse !important;
+      justify-content:space-between !important;width:100% !important;align-items:center !important;gap:10px;}}
+    {ss} .st-key-sb_theme label p{{color:var(--text) !important;font-weight:600 !important;
+      font-size:.95rem !important;display:flex;align-items:center;gap:10px;}}
+    {ss} .st-key-sb_theme label p::before{{content:"";width:18px;height:18px;flex:0 0 auto;
+      background:var(--text2);-webkit-mask:url("{sun}") center/contain no-repeat;
+      mask:url("{sun}") center/contain no-repeat;}}
+    /* Refresh + Log out buttons as cards */
+    {ss} .st-key-sb_refresh button,
+    {ss} .st-key-sb_logout button{{padding:12px 14px !important;font-weight:700 !important;
+      justify-content:center !important;gap:9px;min-height:0 !important;}}
+    {ss} .st-key-sb_refresh{{margin-bottom:11px;}}
+    {ss} .st-key-sb_refresh button::before,
+    {ss} .st-key-sb_logout button::before{{content:"";width:18px;height:18px;flex:0 0 auto;}}
+    {ss} .st-key-sb_refresh button{{color:var(--accent-blue) !important;border-color:var(--accent-blue) !important;}}
+    {ss} .st-key-sb_refresh button p{{color:var(--accent-blue) !important;font-weight:700 !important;}}
+    {ss} .st-key-sb_refresh button::before{{background:var(--accent-blue);
+      -webkit-mask:url("{refresh}") center/contain no-repeat;mask:url("{refresh}") center/contain no-repeat;}}
+    {ss} .st-key-sb_logout button p{{color:var(--text) !important;font-weight:700 !important;}}
+    {ss} .st-key-sb_logout button::before{{background:var(--text2);
+      -webkit-mask:url("{logout}") center/contain no-repeat;mask:url("{logout}") center/contain no-repeat;}}
+    </style>""", unsafe_allow_html=True)
+
+
 def workspace() -> None:
     tenant = st.session_state.tenant
     agent_id = tenant["agent_id"]
@@ -2094,22 +2141,26 @@ def workspace() -> None:
         if "_pending_nav" in st.session_state:
             st.session_state["nav"] = st.session_state.pop("_pending_nav")
         page = st.radio("Go to", _NAV, key="nav", label_visibility="collapsed")
-        st.divider()
-        _light = st.toggle("☀️  Light mode", value=st.session_state.get("agent_theme") == "light",
-                           key="theme_toggle")
+        _footer_css()
+        st.markdown('<div class="sb-set-hdr"><span class="ico"></span>Settings</div>',
+                    unsafe_allow_html=True)
+        with st.container(key="sb_theme"):
+            _light = st.toggle("Light mode", value=st.session_state.get("agent_theme") == "light",
+                               key="theme_toggle")
         _want = "light" if _light else "dark"
         if _want != st.session_state.get("agent_theme", "dark"):
             st.session_state["agent_theme"] = _want
             st.rerun()
-        if st.button("🔄  Refresh data", use_container_width=True,
-                     help="Re-pull your latest data and redraw — without signing out."):
-            from core import store
-            if store.using_db():
-                store.hydrate(agent_id, paths.tenant_root(agent_id))
-            st.cache_data.clear()
-            st.toast("Data refreshed.")
-            st.rerun()
-        with st.container(key="logoutbtn"):
+        with st.container(key="sb_refresh"):
+            if st.button("Refresh data", use_container_width=True,
+                         help="Re-pull your latest data and redraw — without signing out."):
+                from core import store
+                if store.using_db():
+                    store.hydrate(agent_id, paths.tenant_root(agent_id))
+                st.cache_data.clear()
+                st.toast("Data refreshed.")
+                st.rerun()
+        with st.container(key="sb_logout"):
             if st.button("Log out", use_container_width=True):
                 st.session_state.tenant = None
                 st.rerun()
