@@ -1911,9 +1911,6 @@ def page_aor(tenant: dict, roster) -> None:
     st.markdown("<br>", unsafe_allow_html=True)
 
     with st.container(border=True):
-        st.markdown(ui.chart_head("Taken — call these first",
-                                  "Script: “I saw your plan got moved to a different agent — did you mean to do that?”",
-                                  "minus"), unsafe_allow_html=True)
         if taken.empty:
             st.success("None taken — you hold every client's AOR. 🛡️")
         else:
