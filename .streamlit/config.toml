@@ -4,7 +4,7 @@ port = 8501
 
 [theme]
 base = "dark"
-primaryColor = "#1677ff"
+primaryColor = "#1455F5"  # BookPilot primary blue
 
 [browser]
 gatherUsageStats = false

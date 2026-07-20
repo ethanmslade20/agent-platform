@@ -14,10 +14,12 @@ import streamlit as st
 from core import (aor_track, carrier_names, charts, commissions_ingest, daily, dashboard_kpis,
                   ingest_service, paths, settings, tenants, ui, updates, views)
 
-# The product name your agents see. Placeholder — change it here anytime.
-APP_NAME = "Agent Book"
+# Product name — drives the browser-tab title and the sidebar/login aria-labels.
+# The on-screen wordmark is the fixed two-tone BookPilot logo (see ui.brand_lockup).
+APP_NAME = "BookPilot"
 
-st.set_page_config(page_title=APP_NAME, page_icon="📘", layout="wide")
+_FAVICON = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "brand", "favicon.svg")
+st.set_page_config(page_title=APP_NAME, page_icon=_FAVICON, layout="wide")
 
 ui.inject_css()  # Ethan's midnight-fintech theme (cards, sidebar, typography)
 st.markdown(
@@ -25,7 +27,6 @@ st.markdown(
     <style>
       [data-testid="stSidebarNav"]{display:none}
       .login-card{max-width:380px;margin:8vh auto 0}
-      .brand{font-size:1.9rem;font-weight:800;letter-spacing:-.02em;margin:0}
       .brand-sub{color:#8a94a6;margin:.35rem 0 1.4rem;font-size:.95rem}
       .ws{color:#8a94a6;font-size:.85rem}
     </style>
@@ -69,7 +70,7 @@ _LOGIN_CSS = f"""
     backdrop-filter: blur(16px);
   }}
 
-  [data-testid="stMarkdownContainer"] p.brand {{ text-align:center; font-size:2.6rem !important; font-weight:800 !important; color:#fff !important; margin:0 !important; letter-spacing:-.02em; line-height:1.1; }}
+  [data-testid="stMarkdownContainer"] div.login-brand {{ margin:0 0 .2rem; }}
   [data-testid="stMarkdownContainer"] p.brand-sub {{ text-align:center; color:#9fb0cc !important; margin:.4rem 0 1.5rem !important; font-size:1.05rem !important; }}
 
   /* tabs */
@@ -135,7 +136,9 @@ def _invite_code() -> str:
 
 def login_screen() -> None:
     st.markdown(_LOGIN_CSS, unsafe_allow_html=True)
-    st.markdown(f'<p class="brand">📘 {APP_NAME}</p>', unsafe_allow_html=True)
+    st.markdown(
+        f'<div class="login-brand">{ui.brand_lockup(icon_px=44, text_rem=2.5, name_color="#ffffff", gap=14, center=True)}</div>',
+        unsafe_allow_html=True)
     st.markdown('<p class="brand-sub">Sign in to your book.</p>', unsafe_allow_html=True)
 
     # Invite-only: account creation is shown ONLY when an INVITE_CODE is configured
@@ -534,7 +537,8 @@ def page_updates(tenant: dict, roster) -> None:
 
     cards = []
     for e in hist:  # history is stored newest-first (log.insert(0, ...))
-        hd = f'<div class="bu-hd"><span class="bu-hd-t">📘 Book updated · {_bu_esc(e.get("date", ""))}</span></div>'
+        hd = (f'<div class="bu-hd"><span class="bu-hd-t" style="display:inline-flex;align-items:center;gap:7px;">'
+              f'{ui.brand_icon_svg(15)}Book updated · {_bu_esc(e.get("date", ""))}</span></div>')
         if e.get("first"):
             body = ('<div class="bu-baseline">' + _BU_INFO
                     + '<span>First upload — baseline set. Changes appear starting with your next upload.</span></div>')
@@ -2115,9 +2119,8 @@ def workspace() -> None:
     agent_id = tenant["agent_id"]
     with st.sidebar:
         st.markdown(
-            f'<div style="display:flex;align-items:center;gap:10px;padding:2px 2px 0;">'
-            f'<span style="font-size:1.3rem;">📘</span>'
-            f'<span style="font-size:1.12rem;font-weight:800;letter-spacing:-.01em;">{APP_NAME}</span></div>',
+            f'<div style="padding:2px 2px 0;" aria-label="{APP_NAME}">'
+            f'{ui.brand_lockup(icon_px=26, text_rem=1.12)}</div>',
             unsafe_allow_html=True)
         st.caption(tenant.get("name") or tenant.get("username"))
         _nav_css()
