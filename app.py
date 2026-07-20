@@ -1986,7 +1986,7 @@ def page_verifications(tenant: dict, roster) -> None:
 
 
 def page_pastdue(tenant: dict, roster) -> None:
-    st.title("Past Due")
+    st.title("Past Due Premium")
     st.caption("Behind-on-payment clients from your Ambetter & Oscar carrier books.")
     pd_df = views.past_due(tenant["agent_id"])
     if pd_df is None:
@@ -2002,7 +2002,7 @@ def page_pastdue(tenant: dict, roster) -> None:
 # (nth-of-type), so keep group starts at positions 1 / 4 / 7 / 9 and the
 # Upload+Settings pair last (13, 14).
 _NAV = ["Dashboard", "Book Updates",                                    # OVERVIEW
-        "AOR Defense", "Re-Engage", "Past Due", "Verifications", "AEP Tracker",  # WORK LISTS
+        "AOR Defense", "Re-Engage", "Past Due Premium", "Verifications", "AEP Tracker",  # WORK LISTS
         "Book", "Client Lookup",                                        # MY BOOK
         "Daily Tracker", "Goals", "Monthly Trends", "Commissions",      # PERFORMANCE & PAY
         "Upload", "Settings"]                                           # ADMIN
@@ -2010,7 +2010,7 @@ _NAV = ["Dashboard", "Book Updates",                                    # OVERVI
 _PAGES = {
     "Dashboard": page_dashboard, "Book Updates": page_updates, "Daily Tracker": page_daily,
     "Goals": page_goals, "Client Lookup": page_client_lookup, "Book": page_book,
-    "Monthly Trends": page_trends, "Commissions": page_commissions, "Past Due": page_pastdue,
+    "Monthly Trends": page_trends, "Commissions": page_commissions, "Past Due Premium": page_pastdue,
     "AOR Defense": page_aor, "Verifications": page_verifications,
     "Re-Engage": page_losses, "AEP Tracker": page_aep, "Settings": page_settings,
 }
