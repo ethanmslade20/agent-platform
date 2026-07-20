@@ -163,7 +163,7 @@ def build_all_clients(months: dict) -> pd.DataFrame:
         col: (col, "last")
         for col in [
             "client_name", "first_name", "last_name", "carrier",
-            "state", "ffm_app_id", "ffm_subscriber_id", "net_premium", "applicant_count",
+            "state", "ffm_app_id", "ffm_subscriber_id", "net_premium", "subsidy", "applicant_count",
             "status", "client_key", "email", "phone", "cancel_notes",
             # HealthSherpa verification follow-ups — carry latest snapshot's values
             "dmi_outstanding", "dmi_expired", "svi_outstanding", "svi_expired", "followup_docs",
@@ -218,7 +218,7 @@ def build_all_clients(months: dict) -> pd.DataFrame:
     cols = [
         "name_key", "client_key", "first_name", "last_name", "carrier",
         "effective_date", "current_effective", "term_date", "status", "state", "ffm_app_id", "ffm_subscriber_id",
-        "email", "phone", "cancel_notes", "net_premium", "applicant_count", "first_seen", "last_seen", "months_on_book",
+        "email", "phone", "cancel_notes", "net_premium", "subsidy", "applicant_count", "first_seen", "last_seen", "months_on_book",
         "dmi_outstanding", "dmi_expired", "svi_outstanding", "svi_expired", "followup_docs",
         "policy_aor", "last_ede_sync", "policy_number", "submission_date", "source",
     ]

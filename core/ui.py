@@ -807,7 +807,7 @@ def _dt_kind(col, series):
         return "muted"
     first = next((str(x) for x in series.tolist()
                   if str(x).strip().lower() not in ("", "nan", "none", "nat")), "")
-    if n == "balance" or first.strip().startswith("$"):
+    if n == "balance" or "premium" in n or first.strip().startswith("$"):
         return "money"
     # Pure-number columns (Members, Policies, counts, %) right-align.
     try:

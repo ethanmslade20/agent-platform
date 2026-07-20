@@ -1979,6 +1979,12 @@ def page_losses(tenant: dict, roster) -> None:
         "Lost": view["_lost_on"].apply(_rel_day),
         "Carrier": view["carrier"],
         "State": view["state"],
+        # Gross monthly plan premium = what the client pays (net) + the APTC subsidy.
+        # net_premium alone is ~$0 for most subsidized ACA clients, so it's the full
+        # plan cost the agent cares about.
+        "Premium": (pd.to_numeric(view.get("net_premium"), errors="coerce").fillna(0)
+                    + pd.to_numeric(view.get("subsidy"), errors="coerce").fillna(0)
+                    ).map(lambda v: f"${v:,.2f}/mo" if v > 0 else "—"),
         "Members": pd.to_numeric(view.get("applicant_count"), errors="coerce").fillna(1).clip(lower=1).astype(int),
         "Why Ended": (view["cancel_reason"].fillna("").replace("", "—")
                       if "cancel_reason" in view.columns else "—"),
