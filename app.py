@@ -2110,13 +2110,11 @@ def _footer_css() -> None:
     (.st-key-sb_theme / sb_refresh / sb_logout) that we repaint as cards.
     """
     ss = 'section[data-testid="stSidebar"]'
-    gear, sun = _nav_icon_uri("gear"), _nav_icon_uri("sun")
+    sun = _nav_icon_uri("sun")
     refresh, logout = _nav_icon_uri("refresh"), _nav_icon_uri("logout")
     st.markdown(f"""<style>
-    {ss} .sb-set-hdr{{display:flex;align-items:center;gap:8px;border-top:1px solid var(--divider);
-      margin:8px 2px 12px;padding-top:14px;font-size:1rem;font-weight:800;color:var(--text);}}
-    {ss} .sb-set-hdr .ico{{width:18px;height:18px;flex:0 0 auto;background:var(--text2);
-      -webkit-mask:url("{gear}") center/contain no-repeat;mask:url("{gear}") center/contain no-repeat;}}
+    /* thin divider separating the nav from the settings cards */
+    {ss} .sb-set-sep{{border-top:1px solid var(--divider);margin:12px 2px 14px;}}
     /* shared card frame */
     {ss} .st-key-sb_theme,
     {ss} .st-key-sb_refresh button,
@@ -2165,8 +2163,7 @@ def workspace() -> None:
             st.session_state["nav"] = st.session_state.pop("_pending_nav")
         page = st.radio("Go to", _NAV, key="nav", label_visibility="collapsed")
         _footer_css()
-        st.markdown('<div class="sb-set-hdr"><span class="ico"></span>Settings</div>',
-                    unsafe_allow_html=True)
+        st.markdown('<div class="sb-set-sep"></div>', unsafe_allow_html=True)
         with st.container(key="sb_theme"):
             _light = st.toggle("Light mode", value=st.session_state.get("agent_theme", "light") == "light",
                                key="theme_toggle")
