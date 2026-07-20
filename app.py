@@ -570,10 +570,10 @@ def page_daily(tenant: dict, roster) -> None:
                         f"text-transform:uppercase;font-weight:700'>{title}</div>", unsafe_allow_html=True)
             if rec:
                 st.markdown(
-                    f"<div style='font-size:1.9rem;font-weight:800;color:#fff;line-height:1.1;margin-top:6px'>"
+                    f"<div style='font-size:1.9rem;font-weight:800;color:var(--text);line-height:1.1;margin-top:6px'>"
                     f"{rec['pol']} <span style='font-size:.85rem;color:#22c55e;font-weight:700'>policies</span></div>"
                     f"<div style='font-size:.78rem;color:#94a3b8'>{rec['pol_when']}</div>"
-                    f"<div style='font-size:1.5rem;font-weight:800;color:#fff;line-height:1.1;margin-top:10px'>"
+                    f"<div style='font-size:1.5rem;font-weight:800;color:var(--text);line-height:1.1;margin-top:10px'>"
                     f"{rec['mem']} <span style='font-size:.85rem;color:#60a5fa;font-weight:700'>members</span></div>"
                     f"<div style='font-size:.78rem;color:#94a3b8'>{rec['mem_when']}</div>", unsafe_allow_html=True)
             else:
@@ -608,8 +608,7 @@ def page_daily(tenant: dict, roster) -> None:
         st.markdown(ui.chart_head("Submissions by Day", "Policies submitted per day this month", "bars"),
                     unsafe_allow_html=True)
         fig = charts.daily_month_fig(ddf)
-        fig.update_xaxes(fixedrange=True); fig.update_yaxes(fixedrange=True)
-        fig.update_layout(dragmode=False)
+        ui.theme_fig(fig)
         evt = st.plotly_chart(fig, use_container_width=True, on_select="rerun",
                               key=f"daily_chart_{ym}",
                               config={"displayModeBar": False, "scrollZoom": False, "doubleClick": False})
@@ -1216,13 +1215,13 @@ def page_goals(tenant: dict, roster) -> None:
     rev_c = "#2ecc71" if rev_pct >= 75 else ("#f39c12" if rev_pct >= 40 else "#4285F4")
     st.markdown(f"""
       <div style="margin-bottom:4px;display:flex;justify-content:space-between;font-size:0.85rem;color:var(--text2);">
-        <span>Members &nbsp;<b style="color:#fff">{current:,}</b></span>
-        <span><b style="color:#fff">{pct_done:.1f}%</b> of {GOAL:,}</span>
+        <span>Members &nbsp;<b style="color:var(--text)">{current:,}</b></span>
+        <span><b style="color:var(--text)">{pct_done:.1f}%</b> of {GOAL:,}</span>
         <span><b>{gap:,} to go &nbsp;·&nbsp; {days_left:,} days left</b></span></div>
       <div class="progress-wrap" style="margin-bottom:14px;"><div class="progress-bar" style="width:{pct_done:.1f}%;background:{bar_c};"></div></div>
       <div style="margin-bottom:4px;display:flex;justify-content:space-between;font-size:0.85rem;color:var(--text2);">
-        <span>Annual Revenue &nbsp;<b style="color:#fff">${current_arr:,.0f}</b></span>
-        <span><b style="color:#fff">{rev_pct:.1f}%</b> of ${goal_arr:,.0f}</span>
+        <span>Annual Revenue &nbsp;<b style="color:var(--text)">${current_arr:,.0f}</b></span>
+        <span><b style="color:var(--text)">{rev_pct:.1f}%</b> of ${goal_arr:,.0f}</span>
         <span><b>${revenue_gap_arr:,.0f} ARR to go</b></span></div>
       <div class="progress-wrap" style="margin-bottom:28px;"><div class="progress-bar" style="width:{rev_pct:.1f}%;background:{rev_c};"></div></div>
     """, unsafe_allow_html=True)
@@ -1413,7 +1412,7 @@ _SETTINGS_CSS = """<style>
   .set-chip{background:var(--input-bg);border:1px solid rgba(96,165,250,.25);border-radius:14px;
      padding:8px 16px;display:flex;align-items:center;gap:12px;}
   .set-chip svg{width:22px;height:22px;stroke:#93c5fd;fill:none;stroke-width:2;}
-  .set-chip .n{font-size:1.45rem;font-weight:800;color:#fff;line-height:1;}
+  .set-chip .n{font-size:1.45rem;font-weight:800;color:var(--text);line-height:1;}
   .set-chip .l{font-size:.7rem;color:var(--text2);text-transform:uppercase;letter-spacing:.05em;}
   /* state list buttons → cards with a chevron */
   .st-key-statelist [data-testid="stButton"] button{width:100%;justify-content:flex-start;text-align:left;

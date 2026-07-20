@@ -798,12 +798,30 @@ def styled_table(df, empty="No rows.", height=520, max_rows=None, bare=False):
                     unsafe_allow_html=True)
 
 
+def theme_fig(fig):
+    """Recolor a Plotly figure for the active theme so text/grid/legend stay
+    readable in light mode (charts bake colors in Python, not CSS). Call before
+    rendering — show_chart does this automatically; call directly for charts
+    rendered outside show_chart (e.g. the clickable daily chart)."""
+    theme = st.session_state.get("agent_theme", "dark")
+    txt, grid = (("#0f172a", "rgba(37,70,130,.12)") if theme == "light"
+                 else ("#e2e8f0", "rgba(96,165,250,0.10)"))
+    fig.update_layout(font=dict(color=txt), legend=dict(font=dict(color=txt)),
+                      paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", dragmode=False)
+    fig.update_xaxes(fixedrange=True, gridcolor=grid, tickfont=dict(color=txt), title_font=dict(color=txt))
+    fig.update_yaxes(fixedrange=True, gridcolor=grid, tickfont=dict(color=txt), title_font=dict(color=txt))
+    # Bar/line value labels sit on the plot bg → follow the theme; pie slice labels
+    # sit on colored wedges → keep white in both themes.
+    fig.update_traces(textfont_color=txt, selector=dict(type="bar"))
+    fig.update_traces(textfont_color=txt, selector=dict(type="scatter"))
+    fig.update_traces(insidetextfont_color="#ffffff", selector=dict(type="pie"))
+    return fig
+
+
 def show_chart(fig):
-    """Render a Plotly chart: keep hover tooltips, but disable the floating
-    toolbar and all zoom/pan/drag so it's display-only."""
-    fig.update_xaxes(fixedrange=True)
-    fig.update_yaxes(fixedrange=True)
-    fig.update_layout(dragmode=False)
+    """Render a Plotly chart: theme it, keep hover tooltips, but disable the
+    floating toolbar and all zoom/pan/drag so it's display-only."""
+    theme_fig(fig)
     st.plotly_chart(
         fig,
         use_container_width=True,
