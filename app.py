@@ -140,7 +140,7 @@ def _invite_code() -> str:
 def login_screen() -> None:
     st.markdown(_LOGIN_CSS, unsafe_allow_html=True)
     st.markdown(
-        f'<div class="login-brand">{ui.brand_lockup(icon_px=44, text_rem=2.5, name_color="#ffffff", gap=14, center=True)}</div>',
+        f'<div class="login-brand">{ui.brand_lockup(icon_px=62, text_rem=3.4, name_color="#ffffff", gap=18, center=True)}</div>',
         unsafe_allow_html=True)
     st.markdown('<p class="brand-sub">Sign in to your book.</p>', unsafe_allow_html=True)
 
