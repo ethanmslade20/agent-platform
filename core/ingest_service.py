@@ -228,6 +228,12 @@ def build_book(agent_id: str, npn: str = "", name: str = ""):
     # One client, one active policy — collapse plan switches (keep newest active,
     # term the older one) so a person never shows twice in the book.
     roster = rules.collapse_plan_switches(roster)
+    # Collapse per-state carrier entities to their brand (e.g. "Ambetter from Peach
+    # State Health Plan", "Ambetter of Tennessee" → "Ambetter") so charts/tables
+    # group by carrier the way Ethan's site does — done last, after carrier-truth.
+    from core import carrier_names
+    if "carrier" in roster.columns:
+        roster["carrier"] = roster["carrier"].apply(carrier_names.brand_of)
     return roster
 
 
