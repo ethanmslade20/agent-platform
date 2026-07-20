@@ -429,9 +429,12 @@ _BU_INFO = ("<svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-w
 _BU_UP = ("<svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' "
           "stroke-linejoin='round'><path d='M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4'/>"
           "<polyline points='7 10 12 15 17 10'/><line x1='12' y1='15' x2='12' y2='3'/></svg>")
+_BU_AOR = ("<svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' "
+           "stroke-linejoin='round'><path d='M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2'/><circle cx='9' cy='7' r='4'/>"
+           "<line x1='17' y1='8' x2='22' y2='13'/><line x1='22' y1='8' x2='17' y2='13'/></svg>")
 
 _BU_CSS = """<style>
-.bu-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:18px;margin:8px 0 30px;}
+.bu-summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin:8px 0 30px;}
 .bu-sc{display:flex;align-items:center;gap:16px;background:var(--panel-solid);border:1px solid var(--border);
  border-radius:16px;box-shadow:var(--card-shadow);padding:20px 22px;min-width:0;}
 .bu-sc-ic{width:52px;height:52px;flex:0 0 52px;border-radius:999px;display:grid;place-items:center;}
@@ -443,6 +446,7 @@ _BU_CSS = """<style>
 .bu-sc.cx .bu-sc-ic{background:var(--bu-cx-bg);color:var(--bu-cx-tx);} .bu-sc.cx .bu-sc-v{color:var(--bu-cx-tx);}
 .bu-sc.wb .bu-sc-ic{background:var(--bu-wb-bg);color:var(--bu-wb-tx);} .bu-sc.wb .bu-sc-v{color:var(--bu-wb-tx);}
 .bu-sc.up .bu-sc-ic{background:var(--pill-bg);color:var(--accent-blue);} .bu-sc.up .bu-sc-v{color:var(--accent-blue);}
+.bu-sc.ar .bu-sc-ic{background:var(--bu-ar-bg);color:var(--bu-ar-tx);} .bu-sc.ar .bu-sc-v{color:var(--bu-ar-tx);}
 .bu-tl{position:relative;padding-left:92px;}
 .bu-tl::before{content:"";position:absolute;top:26px;bottom:32px;left:15px;width:2px;background:var(--border);}
 .bu-item{position:relative;margin-bottom:20px;}
@@ -456,8 +460,8 @@ _BU_CSS = """<style>
 .bu-hd{min-height:56px;display:flex;align-items:center;justify-content:space-between;gap:16px;
  padding:14px 22px;border-bottom:1px solid var(--border);}
 .bu-hd-t{font-size:14.5px;font-weight:700;color:var(--text);}
-.bu-body{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));padding:20px 22px;}
-.bu-sec{min-width:0;padding:0 22px;}
+.bu-body{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));padding:20px 22px;}
+.bu-sec{min-width:0;padding:0 16px;}
 .bu-sec:first-child{padding-left:0;} .bu-sec:last-child{padding-right:0;}
 .bu-sec + .bu-sec{border-left:1px solid var(--border);}
 .bu-sh{display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap;}
@@ -470,6 +474,7 @@ _BU_CSS = """<style>
 .bu-pill.sg{color:var(--bu-sg-tx);background:var(--bu-sg-bg);border-color:var(--bu-sg-bd);}
 .bu-pill.cx{color:var(--bu-cx-tx);background:var(--bu-cx-bg);border-color:var(--bu-cx-bd);}
 .bu-pill.wb{color:var(--bu-wb-tx);background:var(--bu-wb-bg);border-color:var(--bu-wb-bd);}
+.bu-pill.ar{color:var(--bu-ar-tx);background:var(--bu-ar-bg);border-color:var(--bu-ar-bd);}
 .bu-more{display:inline-block;}
 .bu-more>summary{list-style:none;cursor:pointer;color:var(--text2)!important;background:var(--input-bg)!important;border-color:var(--border)!important;}
 .bu-more>summary::-webkit-details-marker{display:none;} .bu-more>summary::marker{content:"";}
@@ -479,11 +484,11 @@ _BU_CSS = """<style>
 .bu-baseline svg{width:18px;height:18px;flex:0 0 18px;color:var(--accent-blue);}
 .bu-end{display:inline-flex;align-items:center;gap:7px;padding:8px 14px;color:var(--text2);
  background:var(--input-bg);border:1px solid var(--border);border-radius:999px;font-size:12px;}
-@media(max-width:1100px){.bu-summary{grid-template-columns:repeat(2,minmax(0,1fr));}}
-@media(max-width:820px){.bu-summary{grid-template-columns:1fr;}.bu-body{grid-template-columns:1fr;}
+@media(max-width:1000px){.bu-body{grid-template-columns:1fr;}
  .bu-sec{padding:16px 0;} .bu-sec:first-child{padding-top:0;} .bu-sec:last-child{padding-bottom:0;}
  .bu-sec + .bu-sec{border-left:0;border-top:1px solid var(--border);}
  .bu-ic{display:none;} .bu-tl{padding-left:30px;} .bu-tl::before{left:9px;} .bu-dot{left:-27px;}}
+@media(max-width:560px){.bu-summary{grid-template-columns:1fr;}}
 </style>"""
 
 
@@ -513,7 +518,9 @@ def _bu_section(icon: str, color: str, cls: str, label: str, counts: str, names:
 
 
 def _bu_cx_names(e: dict) -> list:
-    return list(e.get("lost", [])) + list(e.get("taken", [])) + list(e.get("vexp", []))
+    # Genuine cancellations (+ verification-expired) → Re-Engage. AOR steals are
+    # kept separate (e["taken"]) so they show in their own column.
+    return list(e.get("lost", [])) + list(e.get("vexp", []))
 
 
 def page_updates(tenant: dict, roster) -> None:
@@ -529,8 +536,9 @@ def page_updates(tenant: dict, roster) -> None:
     signed_tot = sum(int(e.get("signed", 0) or 0) for e in real)
     mem_tot = sum(int(e.get("members", 0) or 0) for e in real)
     cx_tot = sum(len(_bu_cx_names(e)) for e in real)
+    ar_tot = sum(len(e.get("taken", [])) for e in real)
     wb_tot = sum(len(e.get("won", [])) for e in real)
-    total_updates = signed_tot + cx_tot + wb_tot
+    total_updates = signed_tot + cx_tot + ar_tot + wb_tot
 
     st.markdown(
         '<div class="bu-summary">'
@@ -538,8 +546,11 @@ def page_updates(tenant: dict, roster) -> None:
           f'<div class="bu-sc-l">Signed</div><div class="bu-sc-v">{signed_tot:,}</div>'
           f'<div class="bu-sc-d">new policies / {mem_tot:,} members</div></div></div>'
         + f'<div class="bu-sc cx"><div class="bu-sc-ic">{_BU_X}</div><div style="min-width:0">'
-          f'<div class="bu-sc-l">Canceled (Re-Engage)</div><div class="bu-sc-v">{cx_tot:,}</div>'
-          f'<div class="bu-sc-d">policies</div></div></div>'
+          f'<div class="bu-sc-l">Cancelled</div><div class="bu-sc-v">{cx_tot:,}</div>'
+          f'<div class="bu-sc-d">policies (Re-Engage)</div></div></div>'
+        + f'<div class="bu-sc ar"><div class="bu-sc-ic">{_BU_AOR}</div><div style="min-width:0">'
+          f'<div class="bu-sc-l">AOR Taken</div><div class="bu-sc-v">{ar_tot:,}</div>'
+          f'<div class="bu-sc-d">taken by another agent</div></div></div>'
         + f'<div class="bu-sc wb"><div class="bu-sc-ic">{_BU_STAR}</div><div style="min-width:0">'
           f'<div class="bu-sc-l">Won Back</div><div class="bu-sc-v">{wb_tot:,}</div>'
           f'<div class="bu-sc-d">policies</div></div></div>'
@@ -559,10 +570,12 @@ def page_updates(tenant: dict, roster) -> None:
                              f'{int(e.get("signed", 0) or 0)} new policies / {int(e.get("members", 0) or 0)} members',
                              e.get("signed_names", []))
             cxn = _bu_cx_names(e)
-            cx = _bu_section(_BU_X, "var(--bu-cx-tx)", "cx", "Canceled (Re-Engage)", f'{len(cxn)} policies', cxn)
+            cx = _bu_section(_BU_X, "var(--bu-cx-tx)", "cx", "Cancelled", f'{len(cxn)} policies', cxn)
+            arn = list(e.get("taken", []))
+            ar = _bu_section(_BU_AOR, "var(--bu-ar-tx)", "ar", "AOR Taken", f'{len(arn)} policies', arn)
             won = e.get("won", [])
             wb = _bu_section(_BU_STAR, "var(--bu-wb-tx)", "wb", "Won Back", f'{len(won)} policies', won)
-            body = f'<div class="bu-body">{sg}{cx}{wb}</div>'
+            body = f'<div class="bu-body">{sg}{cx}{ar}{wb}</div>'
         cards.append(f'<div class="bu-item"><span class="bu-dot"></span>'
                      f'<span class="bu-ic">{_BU_UP}</span><div class="bu-card">{hd}{body}</div></div>')
 

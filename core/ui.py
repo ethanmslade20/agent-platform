@@ -73,6 +73,7 @@ _PALETTES = {
         "--bu-sg-bg": "rgba(34,197,94,.15)", "--bu-sg-tx": "#4ade80", "--bu-sg-bd": "rgba(34,197,94,.32)",
         "--bu-cx-bg": "rgba(239,68,68,.15)", "--bu-cx-tx": "#f87171", "--bu-cx-bd": "rgba(239,68,68,.32)",
         "--bu-wb-bg": "rgba(245,158,11,.15)", "--bu-wb-tx": "#fbbf24", "--bu-wb-bd": "rgba(245,158,11,.32)",
+        "--bu-ar-bg": "rgba(139,92,246,.16)", "--bu-ar-tx": "#a78bfa", "--bu-ar-bd": "rgba(139,92,246,.34)",
     },
     "light": {
         "--bg": "#f8fafc", "--tint1": "rgba(22,119,255,.04)", "--tint2": "rgba(22,119,255,.05)",
@@ -104,6 +105,7 @@ _PALETTES = {
         "--bu-sg-bg": "#eaf8ee", "--bu-sg-tx": "#16853b", "--bu-sg-bd": "#cbeed5",
         "--bu-cx-bg": "#fff0f1", "--bu-cx-tx": "#c52b35", "--bu-cx-bd": "#ffd4d8",
         "--bu-wb-bg": "#fff6e8", "--bu-wb-tx": "#c76a00", "--bu-wb-bd": "#ffddaf",
+        "--bu-ar-bg": "#f2edff", "--bu-ar-tx": "#6d28d9", "--bu-ar-bd": "#d8ccff",
     },
 }
 
