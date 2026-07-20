@@ -119,8 +119,17 @@ def theme_root_css(theme: str) -> str:
         # Catch text that hardcodes a light color inline so it stays readable on white.
         fix = ("[data-testid='stAppViewContainer'],[data-testid='stMarkdownContainer']{color:var(--text);}"
                "[data-testid='stAppViewContainer'] p{color:var(--text2);}"
-               "[data-baseweb='select'] *{color:var(--text) !important;}"
-               "[data-baseweb='popover'] li{color:var(--text) !important;}")
+               "[data-baseweb='select'] *{color:#0f172a !important;}"
+               # Dropdown menus (selectbox/multiselect) render in a portal outside the app
+               # container, so they keep Streamlit's dark base — force them light here.
+               "[data-baseweb='popover'] [role='listbox'],[data-baseweb='popover'] ul,"
+               "[data-baseweb='menu'],[data-baseweb='menu'] ul{background:#ffffff !important;}"
+               "[data-baseweb='popover'] [role='option'],[data-baseweb='popover'] li,"
+               "[data-baseweb='menu'] li{background:#ffffff !important;color:#0f172a !important;}"
+               "[data-baseweb='popover'] [role='option']:hover,"
+               "[data-baseweb='popover'] [role='option'][aria-selected='true'],"
+               "[data-baseweb='popover'] li:hover,[data-baseweb='menu'] li:hover"
+               "{background:#eaf2ff !important;color:#0f172a !important;}")
     return f"<style>:root{{{root}}}{fix}</style>"
 
 ICONS = {
