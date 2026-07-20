@@ -190,15 +190,30 @@ def paid_by_month_fig(bm: pd.DataFrame):
     """Commission received per month — green bars. Plotly (not st.bar_chart) so the
     app never imports altair, which breaks on bleeding-edge Python on the host."""
     df = bm.copy()
-    fig = px.bar(df, x="Month", y="Paid", text="Paid")
+    # 'Month' arrives as 'YYYY-MM' (e.g. '2026-06'). Render a human label AND force a
+    # categorical x-axis — otherwise Plotly reads the ISO string as a datetime and
+    # spreads the bars across a continuous date axis with bi-weekly ticks.
+    def _lbl(m):
+        try:
+            return pd.to_datetime(f"{m}-01").strftime("%b %Y")
+        except Exception:
+            return str(m)
+    df["MonthLabel"] = df["Month"].astype(str).map(_lbl)
+    order = df["MonthLabel"].tolist()
+    _p = pd.to_numeric(df["Paid"], errors="coerce").fillna(0)
+    _lo = min(0.0, float(_p.min()))
+    _hi = (float(_p.max()) * 1.18) or 1.0     # headroom so the top $ label isn't clipped
+    fig = px.bar(df, x="MonthLabel", y="Paid", text="Paid")
     fig.update_traces(marker_color=GREEN, marker_cornerradius=6, textposition="outside",
                       texttemplate="$%{y:,.0f}", textfont=dict(size=11, color="#cbd5e1"),
                       hovertemplate="%{x}: $%{y:,.2f}<extra></extra>")
     fig.update_layout(**ui._chart_layout(
         showlegend=False, height=300,
-        xaxis=dict(title="", showgrid=False, tickangle=-45 if len(df) > 4 else 0,
-                   tickfont=dict(size=11)),
-        yaxis=dict(title="", gridcolor="rgba(96,165,250,0.10)", tickprefix="$", tickformat=",.0f"),
+        xaxis=dict(title="", showgrid=False, type="category",
+                   categoryorder="array", categoryarray=order,
+                   tickangle=-45 if len(df) > 6 else 0, tickfont=dict(size=11)),
+        yaxis=dict(title="", gridcolor="rgba(96,165,250,0.10)", tickprefix="$", tickformat=",.0f",
+                   range=[_lo, _hi]),
         margin=dict(t=20, b=44, l=10, r=10)))
     return fig
 
