@@ -2001,11 +2001,11 @@ def page_pastdue(tenant: dict, roster) -> None:
 # Nav order matters — the section labels + bottom divider are painted by CSS
 # (nth-of-type), so keep group starts at positions 1 / 4 / 7 / 9 and the
 # Upload+Settings pair last (13, 14).
-_NAV = ["Dashboard", "Book Updates", "Daily Tracker", "Goals",
-        "Client Lookup", "Book", "Monthly Trends",
-        "Commissions", "Past Due",
-        "AOR Defense", "Verifications", "Re-Engage", "AEP Tracker",
-        "Upload", "Settings"]
+_NAV = ["Dashboard", "Book Updates",                                    # OVERVIEW
+        "AOR Defense", "Re-Engage", "Past Due", "Verifications", "AEP Tracker",  # WORK LISTS
+        "Book", "Client Lookup",                                        # MY BOOK
+        "Daily Tracker", "Goals", "Monthly Trends", "Commissions",      # PERFORMANCE & PAY
+        "Upload", "Settings"]                                           # ADMIN
 
 _PAGES = {
     "Dashboard": page_dashboard, "Book Updates": page_updates, "Daily Tracker": page_daily,
@@ -2025,8 +2025,12 @@ _NAV_ICON_PATHS = {
     "upload": ("<path d='M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4'/>"
                "<polyline points='17 8 12 3 7 8'/><line x1='12' y1='3' x2='12' y2='15'/>"),
 }
-_NAV_ICONS = ["grid", "file", "calendar", "target", "users", "book", "trend", "dollar",
-              "clock", "shield", "bell", "refresh", "calendar", "upload", "gear"]
+# One icon per _NAV item, IN _NAV ORDER (positional — keep in sync with _NAV).
+_NAV_ICONS = ["grid", "file",                                  # Dashboard, Book Updates
+              "shield", "refresh", "clock", "bell", "calendar",  # AOR, Re-Engage, Past Due, Verifications, AEP
+              "book", "users",                                 # Book, Client Lookup
+              "calendar", "target", "trend", "dollar",         # Daily Tracker, Goals, Monthly Trends, Commissions
+              "upload", "gear"]                                # Upload, Settings
 
 
 def _nav_icon_uri(key: str) -> str:
@@ -2051,7 +2055,7 @@ def _nav_css() -> None:
     for i, key in enumerate(_NAV_ICONS, start=1):
         u = _nav_icon_uri(key)
         css.append(f'{sb}:nth-of-type({i})::before{{-webkit-mask-image:url("{u}");mask-image:url("{u}");}}')
-    for i, title in [(1, "OVERVIEW"), (5, "CLIENTS"), (8, "MONEY"), (10, "FOLLOW UPS")]:
+    for i, title in [(1, "OVERVIEW"), (3, "WORK LISTS"), (8, "MY BOOK"), (10, "PERFORMANCE & PAY")]:
         css.append(f'{sb}:nth-of-type({i}){{margin-top:{12 if i == 1 else 22}px;position:relative;overflow:visible;}}')
         css.append(f'{sb}:nth-of-type({i})::after{{content:"{title}";position:absolute;top:-15px;left:10px;'
                    f'font-size:.64rem;letter-spacing:.13em;color:var(--nav-label);font-weight:700;}}')
