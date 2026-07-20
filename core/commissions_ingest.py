@@ -59,6 +59,16 @@ _SUMMARY_RE = re.compile(
 _TOTAL_LABEL_RE = re.compile(
     r"total\s*commission(s)?\s*(paid|due)?|grand\s*total|total\s*(paid|commission)", re.I)
 
+# Sentinel period mapping: file the WHOLE statement under its own printed payment
+# date. FMO statements pay one lump on one date and print it only in the title
+# ("Payment Date: June 19, 2026"); the per-row "Pay Period" is the COVERAGE month,
+# so mapping period to it misfiles the money by month. This sentinel says "use the
+# statement's payment date," resolved fresh on every upload (never a stale month).
+STMT_DATE = "__statement_date__"
+
+# Preamble labels that carry the statement's payment date, most authoritative first.
+_STMT_DATE_LABELS = ("payment date", "commission date", "statement date", "paid date")
+
 
 def _norm(s) -> str:
     return re.sub(r"\s+", " ", str(s).strip().lower())
@@ -241,6 +251,44 @@ def stated_total(data: bytes, filename: str):
     return None
 
 
+def statement_period(data: bytes, filename: str):
+    """The statement's own printed payment date (e.g. 'Payment Date: June 19, 2026')
+    as 'YYYY-MM'. This is WHEN the money was received — the right month to file the
+    whole statement under. None if the file has no such label in its preamble."""
+    name = (filename or "").lower()
+    rows = []
+    try:
+        if name.endswith((".xlsx", ".xls")):
+            raw = pd.read_excel(io.BytesIO(data), header=None, dtype=str)
+            rows = [[_clean_cell(c) for c in r] for r in raw.values.tolist()]
+        elif name.endswith(".pdf"):
+            import pdfplumber
+            lines = []
+            with pdfplumber.open(io.BytesIO(data)) as pdf:
+                for page in pdf.pages:
+                    lines += (page.extract_text() or "").split("\n")
+            rows = [re.split(r"\s{2,}|:\s+", ln) for ln in lines]
+        else:
+            raw = pd.read_csv(io.BytesIO(data), header=None, dtype=str,
+                              keep_default_na=False, on_bad_lines="skip", engine="python")
+            rows = [[_clean_cell(c) for c in r] for r in raw.values.tolist()]
+    except Exception:
+        return None
+
+    for label in _STMT_DATE_LABELS:                 # payment > commission > statement
+        for row in rows[:30]:                       # preamble only
+            for j, c in enumerate(row):
+                if label in str(c).lower():
+                    # date may sit after the label in the same cell, or in later cells
+                    same = re.sub(r"(?i).*" + re.escape(label), "", str(c)).strip(": ")
+                    for text in [same] + [str(x) for x in row[j + 1:j + 3]]:
+                        if text.strip():
+                            dt = pd.to_datetime(text, errors="coerce")
+                            if pd.notna(dt):
+                                return dt.strftime("%Y-%m")
+    return None
+
+
 def header_sig(df: pd.DataFrame) -> str:
     """Stable signature of a file's shape so a saved mapping can be re-matched."""
     return "|".join(sorted(_norm(c) for c in df.columns))
@@ -297,8 +345,13 @@ def _money(v) -> float:
     return -val if neg else val
 
 
-def parse(df: pd.DataFrame, mapping: dict, source_file: str) -> pd.DataFrame:
-    """Turn a raw file + column mapping into canonical commission records."""
+def parse(df: pd.DataFrame, mapping: dict, source_file: str,
+          statement_month: str | None = None) -> pd.DataFrame:
+    """Turn a raw file + column mapping into canonical commission records.
+
+    If mapping['period'] is the STMT_DATE sentinel, every row is filed under
+    statement_month (the statement's printed payment date) — the correct behavior
+    for FMO statements that pay one lump on one date."""
     amt_col = mapping.get("amount")
     if not amt_col or amt_col not in df.columns:
         raise ValueError("Pick which column holds the commission amount.")
@@ -313,7 +366,9 @@ def parse(df: pd.DataFrame, mapping: dict, source_file: str) -> pd.DataFrame:
         out["carrier"] = "Unknown"
 
     per_col = mapping.get("period")
-    if per_col and per_col in df.columns:
+    if per_col == STMT_DATE:
+        out["period"] = statement_month or "Unknown"
+    elif per_col and per_col in df.columns:
         dts = pd.to_datetime(df[per_col], errors="coerce")
         out["period"] = dts.dt.strftime("%Y-%m").fillna("Unknown")
     else:

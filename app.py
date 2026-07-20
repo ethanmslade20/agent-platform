@@ -1029,19 +1029,37 @@ def _commission_upload(agent_id: str) -> None:
                    else "We auto-detected your columns — check them and fix any that are off.")
         st.dataframe(df.head(5), use_container_width=True, hide_index=True)
 
+        # These FMO statements print the payment date only in the title block, not a
+        # per-row column — so offer it as the period and default to it (filing by the
+        # per-row "Pay Period"/coverage month would scatter one payment across months).
+        stmt_month = commissions_ingest.statement_period(up.getvalue(), up.name)
+        stmt_opt = f"📅 Statement payment date ({stmt_month})" if stmt_month else None
+
         opts = ["(none)"] + [str(c) for c in df.columns]
         chosen, mcols = {}, st.columns(len(commissions_ingest.CANON))
         for (key, label, req), col in zip(commissions_ingest.CANON, mcols):
-            default = mapping0.get(key)
-            idx = opts.index(default) if default in opts else 0
-            sel = col.selectbox(label + (" *" if req else ""), opts, index=idx, key=f"cm_{key}")
-            chosen[key] = None if sel == "(none)" else sel
+            if key == "period" and stmt_opt:
+                # Default to the statement's payment date whenever the file prints one —
+                # it's the money-received month, and it overrides a stale saved choice
+                # (e.g. an earlier upload that mis-picked the coverage "Pay Period").
+                popts = [stmt_opt, "(none)"] + [str(c) for c in df.columns]
+                sel = col.selectbox(label, popts, index=0, key="cm_period",
+                                    help="This statement pays one lump on one date, so filing it "
+                                         "under that payment date puts the money in the month you "
+                                         "actually got paid.")
+                chosen["period"] = (commissions_ingest.STMT_DATE if sel == stmt_opt
+                                    else (None if sel == "(none)" else sel))
+            else:
+                default = mapping0.get(key)
+                idx = opts.index(default) if default in opts else 0
+                sel = col.selectbox(label + (" *" if req else ""), opts, index=idx, key=f"cm_{key}")
+                chosen[key] = None if sel == "(none)" else sel
 
         # Capture check: does the parsed sum match the statement's own printed total?
         stated = commissions_ingest.stated_total(up.getvalue(), up.name)
         if chosen.get("amount"):
             try:
-                preview = commissions_ingest.parse(df, chosen, up.name)
+                preview = commissions_ingest.parse(df, chosen, up.name, statement_month=stmt_month)
                 psum = float(preview["amount"].sum())
                 if stated is not None and abs(psum - stated) < 0.5:
                     st.success(f"Captured ${psum:,.2f} across {len(preview):,} lines — "
@@ -1057,7 +1075,7 @@ def _commission_upload(agent_id: str) -> None:
 
         if st.button("Save & add", type="primary"):
             try:
-                new = commissions_ingest.parse(df, chosen, up.name)
+                new = commissions_ingest.parse(df, chosen, up.name, statement_month=stmt_month)
                 if new.empty:
                     st.warning("No commission rows found with that mapping — double-check the amount column.")
                     return
