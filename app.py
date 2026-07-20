@@ -597,7 +597,7 @@ def page_updates(tenant: dict, roster) -> None:
 
 
 def page_dashboard(tenant: dict, roster) -> None:
-    st.title("Dashboard")
+    st.title("ACA Dashboard")
     d = dashboard_kpis.compute(tenant["agent_id"], roster)
     if d is None:
         _need_book(); return
@@ -687,7 +687,7 @@ def page_dashboard(tenant: dict, roster) -> None:
         vet_pct = round(buckets["18 MO+"] / total_p * 100)
         st.markdown(
             f'<div class="insight"><div class="in-icon">{ui.ICONS.get("info", "")}</div>'
-            f'<div><div class="in-main">{new_pct}% of your book is under 6 months old (higher AEP risk)</div>'
+            f'<div><div class="in-main">{new_pct}% of your book is under 6 months old (higher OEP risk)</div>'
             f'<div class="in-sub">{vet_pct}% has been with you 18+ months (most loyal clients)</div></div></div>',
             unsafe_allow_html=True)
 
@@ -919,7 +919,7 @@ def page_client_lookup(tenant: dict, roster) -> None:
         st.success("You are the agent of record.", icon="🛡️")
     else:
         who = _re.sub(r"\s*\(NPN.*\)", "", aor).strip().title()
-        st.error(f"Agent of record is **{who}** — this client is on your AOR Defense page.", icon="🚨")
+        st.error(f"Agent of record is **{who}** — this client is on your AOR at Risk page.", icon="🚨")
 
     # ── Stat cards ──────────────────────────────────────────────────────────────
     prem = pd.to_numeric(r.get("net_premium"), errors="coerce")
@@ -1463,7 +1463,7 @@ _AEP_STATUSES = ["Not Started", "Contacted", "Renewed", "Lost"]
 
 
 def page_aep(tenant: dict, roster) -> None:
-    st.title("AEP Tracker")
+    st.title("OEP Tracker")
     st.caption("Work every active client through open enrollment — set each one's status as you go.")
     if roster is None:
         _need_book(); return
@@ -1914,7 +1914,7 @@ def page_losses(tenant: dict, roster) -> None:
 
 
 def page_aor(tenant: dict, roster) -> None:
-    st.title("AOR Defense")
+    st.title("AOR at Risk")
     st.caption("Clients another agent filed an Agent-of-Record change on — call them, most don't "
                "know they were switched. Newest steals first — the freshest are the most winnable.")
     st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
@@ -2041,7 +2041,7 @@ def page_pastdue(tenant: dict, roster) -> None:
 # (nth-of-type), so keep group starts at positions 1 / 4 / 7 / 9 and the
 # Upload+Settings pair last (13, 14).
 _NAV = ["Dashboard", "Book Updates",                                    # OVERVIEW
-        "AOR Defense", "Re-Engage", "Past Due Premium", "Documents Due", "AEP Tracker",  # WORK LISTS
+        "AOR at Risk", "Re-Engage", "Past Due Premium", "Documents Due", "OEP Tracker",  # WORK LISTS
         "Book", "Client Lookup",                                        # MY BOOK
         "Daily Tracker", "Goals", "Monthly Trends", "Commissions",      # PERFORMANCE & PAY
         "Upload", "Settings"]                                           # ADMIN
@@ -2050,8 +2050,8 @@ _PAGES = {
     "Dashboard": page_dashboard, "Book Updates": page_updates, "Daily Tracker": page_daily,
     "Goals": page_goals, "Client Lookup": page_client_lookup, "Book": page_book,
     "Monthly Trends": page_trends, "Commissions": page_commissions, "Past Due Premium": page_pastdue,
-    "AOR Defense": page_aor, "Documents Due": page_verifications,
-    "Re-Engage": page_losses, "AEP Tracker": page_aep, "Settings": page_settings,
+    "AOR at Risk": page_aor, "Documents Due": page_verifications,
+    "Re-Engage": page_losses, "OEP Tracker": page_aep, "Settings": page_settings,
 }
 _NO_ROSTER = {"Upload", "Settings", "Book Updates"}
 
