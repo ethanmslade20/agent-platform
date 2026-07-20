@@ -681,16 +681,16 @@ def page_daily(tenant: dict, roster) -> None:
     for col, title, rec in zip(st.columns(3), ["Best Day", "Best Week", "Best Month"],
                                [best_day, best_week, best_month]):
         with col, st.container(border=True):
-            st.markdown(f"<div style='font-size:.72rem;letter-spacing:.09em;color:#94a3b8;"
+            st.markdown(f"<div style='font-size:.72rem;letter-spacing:.09em;color:var(--text2);"
                         f"text-transform:uppercase;font-weight:700'>{title}</div>", unsafe_allow_html=True)
             if rec:
                 st.markdown(
                     f"<div style='font-size:1.9rem;font-weight:800;color:var(--text);line-height:1.1;margin-top:6px'>"
                     f"{rec['pol']} <span style='font-size:.85rem;color:#22c55e;font-weight:700'>policies</span></div>"
-                    f"<div style='font-size:.78rem;color:#94a3b8'>{rec['pol_when']}</div>"
+                    f"<div style='font-size:.78rem;color:var(--text2)'>{rec['pol_when']}</div>"
                     f"<div style='font-size:1.5rem;font-weight:800;color:var(--text);line-height:1.1;margin-top:10px'>"
                     f"{rec['mem']} <span style='font-size:.85rem;color:#60a5fa;font-weight:700'>members</span></div>"
-                    f"<div style='font-size:.78rem;color:#94a3b8'>{rec['mem_when']}</div>", unsafe_allow_html=True)
+                    f"<div style='font-size:.78rem;color:var(--text2)'>{rec['mem_when']}</div>", unsafe_allow_html=True)
             else:
                 st.markdown("—")
 
@@ -827,12 +827,13 @@ _LOOKUP_CSS = """<style>
   .st-key-lookup_hero div[data-baseweb="select"] > div {
       font-size:1.08rem; padding:8px 12px; border-radius:14px;
       background:var(--input-bg); border:1.5px solid rgba(96,165,250,.4);
-      box-shadow:0 6px 22px rgba(0,0,0,.3);}
-  .st-key-lookup_hero div[data-baseweb="select"] > div > div:first-child,
-  .st-key-lookup_hero div[data-baseweb="select"] > div > div:first-child > div {
-      color:var(--text) !important; font-weight:700 !important; opacity:1 !important;}
-  .st-key-lookup_hero div[data-baseweb="select"] input {
-      color:var(--text) !important; font-weight:600 !important; -webkit-text-fill-color:var(--text) !important;}
+      box-shadow:var(--card-shadow);}
+  /* Force the typed text + selected value dark/readable in both themes (the exact
+     BaseWeb DOM path shifts between versions, so cover input + all select text). */
+  .st-key-lookup_hero div[data-baseweb="select"] *,
+  .st-key-lookup_hero input {
+      color:var(--text) !important; -webkit-text-fill-color:var(--text) !important;
+      font-weight:600 !important; opacity:1 !important;}
 </style>"""
 
 
@@ -871,14 +872,14 @@ def page_client_lookup(tenant: dict, roster) -> None:
     pill_bg, pill_tx = (("rgba(34,197,94,.15)", "#4ade80") if is_active
                         else ("rgba(239,68,68,.15)", "#f87171"))
     pid = str(r.get("policy_number") or "").strip()
-    pid_txt = (f" · Policy ID: <span style='color:#e2e8f0;font-weight:600;'>{pid}</span>"
+    pid_txt = (f" · Policy ID: <span style='color:var(--accent-blue);font-weight:700;'>{pid}</span>"
                if pid and pid.lower() not in ("nan", "none") else "")
     st.markdown(
         f"<div style='display:flex;align-items:center;gap:14px;margin:6px 0 2px;'>"
         f"<span style='font-size:1.6rem;font-weight:800;color:var(--text);'>{person}</span>"
         f"<span style='background:{pill_bg};color:{pill_tx};padding:3px 12px;border-radius:999px;"
         f"font-size:.8rem;font-weight:700;'>{r.get('status', '?')}</span></div>"
-        f"<div style='color:#94a3b8;font-size:.95rem;margin-bottom:10px;'>"
+        f"<div style='color:var(--text2);font-size:.95rem;margin-bottom:10px;'>"
         f"{r.get('carrier', '—')} · {r.get('state', '—')}{pid_txt}</div>",
         unsafe_allow_html=True)
 
@@ -1687,7 +1688,7 @@ def page_settings(tenant: dict, roster) -> None:
                 st.markdown(
                     f'<div class="set-footer"><span>✓ <b>{len(selected)}</b> carrier'
                     f'{"" if len(selected) == 1 else "s"} selected</span>'
-                    f'<span style="color:#94a3b8">{names}</span></div>', unsafe_allow_html=True)
+                    f'<span style="color:var(--text2)">{names}</span></div>', unsafe_allow_html=True)
 
     # ── Save bar (profile) ──────────────────────────────────────────────────────
     sb1, sb2 = st.columns([3, 1])
