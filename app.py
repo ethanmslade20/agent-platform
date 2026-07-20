@@ -675,32 +675,6 @@ def page_daily(tenant: dict, roster) -> None:
     if roster is None:
         _need_book(); return
 
-    # ── Personal bests — new business since the agent started using Agent Book ──
-    best_day, best_week, best_month = daily.personal_bests(roster)
-    _hdr("🏆 Personal Bests — New Business", "trend")
-    st.caption("New clients you've signed since you started using Agent Book — counted from your "
-               "first upload forward, so renewals never count.")
-    if not any([best_day, best_week, best_month]):
-        st.info("Your personal bests will start building as you sign new clients while using "
-                "Agent Book. New sign-ups are counted from your first upload onward — so the "
-                "numbers here are always real, and renewals never sneak in.", icon="🏆")
-    else:
-        for col, title, rec in zip(st.columns(3), ["Best Day", "Best Week", "Best Month"],
-                                   [best_day, best_week, best_month]):
-            with col, st.container(border=True):
-                st.markdown(f"<div style='font-size:.72rem;letter-spacing:.09em;color:var(--text2);"
-                            f"text-transform:uppercase;font-weight:700'>{title}</div>", unsafe_allow_html=True)
-                if rec:
-                    st.markdown(
-                        f"<div style='font-size:1.9rem;font-weight:800;color:var(--text);line-height:1.1;margin-top:6px'>"
-                        f"{rec['pol']} <span style='font-size:.85rem;color:#22c55e;font-weight:700'>policies</span></div>"
-                        f"<div style='font-size:.78rem;color:var(--text2)'>{rec['pol_when']}</div>"
-                        f"<div style='font-size:1.5rem;font-weight:800;color:var(--text);line-height:1.1;margin-top:10px'>"
-                        f"{rec['mem']} <span style='font-size:.85rem;color:#60a5fa;font-weight:700'>members</span></div>"
-                        f"<div style='font-size:.78rem;color:var(--text2)'>{rec['mem_when']}</div>", unsafe_allow_html=True)
-                else:
-                    st.markdown("—")
-
     months_av = daily.months_available(roster)
     if not months_av:
         st.caption("Daily breakdown appears once you've signed new clients across a month.")
