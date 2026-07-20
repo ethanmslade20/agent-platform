@@ -227,7 +227,7 @@ def brand_lockup(icon_px: int = 26, text_rem: float = 1.12,
 
 def inject_css():
     # Palette first (dark/light) so every var() below resolves for the active theme.
-    st.markdown(theme_root_css(st.session_state.get("agent_theme", "dark")), unsafe_allow_html=True)
+    st.markdown(theme_root_css(st.session_state.get("agent_theme", "light")), unsafe_allow_html=True)
     st.markdown(f"""
     <style>
       @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
@@ -888,7 +888,7 @@ def theme_fig(fig):
     readable in light mode (charts bake colors in Python, not CSS). Call before
     rendering — show_chart does this automatically; call directly for charts
     rendered outside show_chart (e.g. the clickable daily chart)."""
-    theme = st.session_state.get("agent_theme", "dark")
+    theme = st.session_state.get("agent_theme", "light")
     txt, grid = (("#0f172a", "rgba(37,70,130,.12)") if theme == "light"
                  else ("#e2e8f0", "rgba(96,165,250,0.10)"))
     fig.update_layout(font=dict(color=txt), legend=dict(font=dict(color=txt)),

@@ -24,7 +24,11 @@ APP_NAME = "BookPilot"
 _ICON = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "brand", "favicon.png")
 st.set_page_config(page_title=APP_NAME, page_icon=(_ICON if os.path.exists(_ICON) else "🧭"), layout="wide")
 
-ui.inject_css()  # Ethan's midnight-fintech theme (cards, sidebar, typography)
+# Light mode is the default experience; the sidebar toggle switches to dark. Must be
+# set BEFORE inject_css() (which reads agent_theme to pick the palette).
+st.session_state.setdefault("agent_theme", "light")
+
+ui.inject_css()  # BookPilot theme (cards, sidebar, typography)
 st.markdown(
     """
     <style>
@@ -48,79 +52,97 @@ _ICON_LOCK = ("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' view
               "fill='none' stroke='%237286ad' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E"
               "%3Crect x='4' y='11' width='16' height='10' rx='2'/%3E%3Cpath d='M8 11V7a4 4 0 0 1 8 0v4'/%3E%3C/svg%3E")
 
-_LOGIN_CSS = f"""
+def _login_css(theme: str) -> str:
+    """Login-screen styling, themed. Light is the default; dark keeps the glass look."""
+    light = theme == "light"
+    page_bg = (
+        "radial-gradient(820px 460px at 50% 8%, rgba(36,116,255,0.10), transparent 60%),"
+        "radial-gradient(680px 480px at 12% 82%, rgba(20,85,245,0.08), transparent 55%),"
+        "radial-gradient(680px 480px at 88% 74%, rgba(36,116,255,0.07), transparent 55%),#eef4ff"
+        if light else
+        "radial-gradient(820px 460px at 50% 10%, rgba(59,130,246,0.18), transparent 60%),"
+        "radial-gradient(680px 480px at 12% 82%, rgba(37,99,235,0.16), transparent 55%),"
+        "radial-gradient(680px 480px at 88% 74%, rgba(124,58,237,0.16), transparent 55%),#060b1a")
+    card_bg = "#ffffff" if light else "linear-gradient(160deg, rgba(32,46,88,0.55), rgba(14,22,46,0.6))"
+    card_border = "#dce4ee" if light else "rgba(129,140,248,0.34)"
+    card_shadow = ("0 24px 64px rgba(15,23,42,0.10),0 2px 8px rgba(15,23,42,0.05)" if light
+                   else "0 34px 90px rgba(0,0,0,0.55),0 0 70px rgba(59,130,246,0.14),inset 0 1px 0 rgba(255,255,255,0.05)")
+    blur = "none" if light else "blur(16px)"
+    sub = "#62728d" if light else "#9fb0cc"
+    tab = "#62728d" if light else "#8a98b5"
+    tab_active = "#1455F5" if light else "#60a5fa"
+    tab_hl = "#1455F5" if light else "#3b82f6"
+    label = "#0f172a" if light else "#e6edf7"
+    in_bg = "#ffffff" if light else "rgba(9,16,34,0.72)"
+    in_border = "#cbd5e1" if light else "rgba(96,165,250,0.28)"
+    in_text = "#0f172a" if light else "#e6edf7"
+    in_ph = "#94a3b8" if light else "#66768f"
+    focus = "#1455F5" if light else "#3b82f6"
+    focus_ring = "rgba(20,85,245,0.15)" if light else "rgba(59,130,246,0.18)"
+    eye = "#94a3b8" if light else "#66768f"
+    eye_hover = "#0f172a" if light else "#e6edf7"
+    forgot = "#1455F5" if light else "#60a5fa"
+    btn = "linear-gradient(90deg,#1455F5 0%,#2474FF 100%)" if light else "linear-gradient(90deg,#3b82f6 0%,#7c3aed 100%)"
+    btn_shadow = "0 12px 28px rgba(20,85,245,0.30)" if light else "0 12px 30px rgba(79,70,229,0.42)"
+    return f"""
 <style>
   [data-testid="stToolbar"], [data-testid="stDecoration"], [data-testid="stStatusWidget"], footer {{ display:none !important; }}
   header[data-testid="stHeader"] {{ background:transparent; }}
 
-  [data-testid="stAppViewContainer"] {{
-    background:
-      radial-gradient(820px 460px at 50% 10%, rgba(59,130,246,0.18), transparent 60%),
-      radial-gradient(680px 480px at 12% 82%, rgba(37,99,235,0.16), transparent 55%),
-      radial-gradient(680px 480px at 88% 74%, rgba(124,58,237,0.16), transparent 55%),
-      #060b1a !important;
-  }}
+  [data-testid="stAppViewContainer"] {{ background: {page_bg} !important; }}
 
-  /* the glass card = the centered content block */
+  /* the card = the centered content block */
   .block-container {{
-    max-width: 600px !important;
-    margin: 6vh auto 0 !important;
-    padding: 44px 54px 40px !important;
-    background: linear-gradient(160deg, rgba(32,46,88,0.55), rgba(14,22,46,0.6)) !important;
-    border: 1px solid rgba(129,140,248,0.34);
-    border-radius: 26px;
-    box-shadow: 0 34px 90px rgba(0,0,0,0.55), 0 0 70px rgba(59,130,246,0.14), inset 0 1px 0 rgba(255,255,255,0.05);
-    backdrop-filter: blur(16px);
+    max-width: 600px !important; margin: 6vh auto 0 !important; padding: 44px 54px 40px !important;
+    background: {card_bg} !important; border: 1px solid {card_border}; border-radius: 26px;
+    box-shadow: {card_shadow}; backdrop-filter: {blur};
   }}
 
   [data-testid="stMarkdownContainer"] div.login-brand {{ margin:0 0 .2rem; }}
-  [data-testid="stMarkdownContainer"] p.brand-sub {{ text-align:center; color:#9fb0cc !important; margin:.4rem 0 1.5rem !important; font-size:1.05rem !important; }}
+  [data-testid="stMarkdownContainer"] p.brand-sub {{ text-align:center; color:{sub} !important; margin:.4rem 0 1.5rem !important; font-size:1.05rem !important; }}
 
   /* tabs */
-  [data-baseweb="tab-list"] {{ justify-content:center; gap:40px; border-bottom:1px solid rgba(129,140,248,0.16) !important; }}
-  [data-baseweb="tab"] {{ color:#8a98b5 !important; font-weight:600; font-size:1rem; padding:8px 2px !important; }}
-  [data-baseweb="tab"][aria-selected="true"] {{ color:#60a5fa !important; }}
-  [data-baseweb="tab-highlight"] {{ background:#3b82f6 !important; height:2px !important; }}
+  [data-baseweb="tab-list"] {{ justify-content:center; gap:40px; border-bottom:1px solid {in_border} !important; }}
+  [data-baseweb="tab"] {{ color:{tab} !important; font-weight:600; font-size:1rem; padding:8px 2px !important; }}
+  [data-baseweb="tab"][aria-selected="true"] {{ color:{tab_active} !important; }}
+  [data-baseweb="tab-highlight"] {{ background:{tab_hl} !important; height:2px !important; }}
 
-  [data-testid="stTextInput"] label {{ color:#e6edf7 !important; font-weight:600; font-size:.95rem; }}
+  [data-testid="stTextInput"] label {{ color:{label} !important; font-weight:600; font-size:.95rem; }}
 
-  /* inputs — border ONLY on the outer wrapper (the inner container stays
-     transparent so password fields don't render a doubled border) */
+  /* inputs — border ONLY on the outer wrapper (inner stays transparent so password
+     fields don't render a doubled border) */
   [data-testid="stTextInput"] [data-baseweb="input"] {{
-    background: rgba(9,16,34,0.72) !important;
-    border: 1px solid rgba(96,165,250,0.28) !important;
-    border-radius: 12px !important;
-    background-repeat:no-repeat !important; background-position:15px center !important; background-size:18px 18px !important;
-    overflow:hidden !important;
+    background: {in_bg} !important; border: 1px solid {in_border} !important; border-radius: 12px !important;
+    background-repeat:no-repeat !important; background-position:15px center !important; background-size:18px 18px !important; overflow:hidden !important;
   }}
-  [data-testid="stTextInput"] [data-baseweb="base-input"] {{
-    background:transparent !important; border:none !important;
-  }}
+  [data-testid="stTextInput"] [data-baseweb="base-input"] {{ background:transparent !important; border:none !important; }}
   [data-testid="stTextInput"]:has(input[type="password"]) [data-baseweb="input"] {{ background-image:url("{_ICON_LOCK}") !important; }}
   [data-testid="stTextInput"]:has(input:not([type="password"])) [data-baseweb="input"] {{ background-image:url("{_ICON_USER}") !important; }}
   [data-testid="stTextInput"] input {{
-    background:transparent !important; color:#e6edf7 !important;
+    background:transparent !important; color:{in_text} !important; -webkit-text-fill-color:{in_text} !important;
     padding: 13px 12px 13px 46px !important; font-size:1rem;
   }}
-  [data-testid="stTextInput"] input::placeholder {{ color:#66768f !important; }}
-  /* reveal-password eye — flat, no border/box, subtle until hover */
+  [data-testid="stTextInput"] input::placeholder {{ color:{in_ph} !important; -webkit-text-fill-color:{in_ph} !important; }}
+  /* reveal-password eye — flat, subtle until hover */
   [data-testid="stTextInput"] [data-baseweb="input"] button {{
-    background:transparent !important; border:none !important; box-shadow:none !important;
-    color:#66768f !important; margin-right:6px !important;
+    background:transparent !important; border:none !important; box-shadow:none !important; color:{eye} !important; margin-right:6px !important;
   }}
-  [data-testid="stTextInput"] [data-baseweb="input"] button:hover {{ color:#e6edf7 !important; }}
-  [data-testid="stTextInput"] [data-baseweb="input"]:focus-within {{ border-color:#3b82f6 !important; box-shadow:0 0 0 3px rgba(59,130,246,0.18) !important; }}
+  [data-testid="stTextInput"] [data-baseweb="input"] button:hover {{ color:{eye_hover} !important; }}
+  [data-testid="stTextInput"] [data-baseweb="input"]:focus-within {{ border-color:{focus} !important; box-shadow:0 0 0 3px {focus_ring} !important; }}
 
   .forgot {{ text-align:right; margin:2px 0 6px; }}
-  .forgot span {{ color:#60a5fa; font-size:.85rem; cursor:pointer; }}
+  .forgot span {{ color:{forgot}; font-size:.85rem; cursor:pointer; }}
 
   /* gradient Sign in button */
   [data-testid="stFormSubmitButton"] button {{
-    background: linear-gradient(90deg, #3b82f6 0%, #7c3aed 100%) !important;
-    color:#fff !important; font-weight:700 !important; font-size:1.05rem !important;
+    background: {btn} !important; color:#fff !important; font-weight:700 !important; font-size:1.05rem !important;
     border:none !important; border-radius:14px !important; padding:13px !important;
-    box-shadow: 0 12px 30px rgba(79,70,229,0.42) !important; transition:filter .15s ease;
+    box-shadow: {btn_shadow} !important; transition:filter .15s ease;
   }}
+  /* keep the label white — light-mode markdown rules otherwise paint it grey */
+  [data-testid="stFormSubmitButton"] button p,
+  [data-testid="stFormSubmitButton"] button div,
+  [data-testid="stFormSubmitButton"] button span {{ color:#fff !important; -webkit-text-fill-color:#fff !important; }}
   [data-testid="stFormSubmitButton"] button:hover {{ filter:brightness(1.08); }}
 </style>
 """
@@ -138,9 +160,11 @@ def _invite_code() -> str:
 
 
 def login_screen() -> None:
-    st.markdown(_LOGIN_CSS, unsafe_allow_html=True)
+    theme = st.session_state.get("agent_theme", "light")
+    st.markdown(_login_css(theme), unsafe_allow_html=True)
+    name_color = "#06143D" if theme == "light" else "#ffffff"
     st.markdown(
-        f'<div class="login-brand">{ui.brand_lockup(icon_px=62, text_rem=3.4, name_color="#ffffff", gap=18, center=True)}</div>',
+        f'<div class="login-brand">{ui.brand_lockup(icon_px=62, text_rem=3.4, name_color=name_color, gap=18, center=True)}</div>',
         unsafe_allow_html=True)
     st.markdown('<p class="brand-sub">Sign in to your book.</p>', unsafe_allow_html=True)
 
@@ -2136,10 +2160,10 @@ def workspace() -> None:
         st.markdown('<div class="sb-set-hdr"><span class="ico"></span>Settings</div>',
                     unsafe_allow_html=True)
         with st.container(key="sb_theme"):
-            _light = st.toggle("Light mode", value=st.session_state.get("agent_theme") == "light",
+            _light = st.toggle("Light mode", value=st.session_state.get("agent_theme", "light") == "light",
                                key="theme_toggle")
         _want = "light" if _light else "dark"
-        if _want != st.session_state.get("agent_theme", "dark"):
+        if _want != st.session_state.get("agent_theme", "light"):
             st.session_state["agent_theme"] = _want
             st.rerun()
         with st.container(key="sb_refresh"):
