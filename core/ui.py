@@ -70,6 +70,9 @@ _PALETTES = {
         "--icon-neg": "#60a5fa",
         "--card-shadow": "inset 0 1px 0 rgba(255,255,255,.03),0 10px 30px rgba(0,0,0,.25)",
         "--card-shadow-hover": "0 0 0 1px rgba(96,165,250,.25),0 16px 42px rgba(8,20,46,.6),0 0 32px rgba(59,130,246,.16)",
+        "--bu-sg-bg": "rgba(34,197,94,.15)", "--bu-sg-tx": "#4ade80", "--bu-sg-bd": "rgba(34,197,94,.32)",
+        "--bu-cx-bg": "rgba(239,68,68,.15)", "--bu-cx-tx": "#f87171", "--bu-cx-bd": "rgba(239,68,68,.32)",
+        "--bu-wb-bg": "rgba(245,158,11,.15)", "--bu-wb-tx": "#fbbf24", "--bu-wb-bd": "rgba(245,158,11,.32)",
     },
     "light": {
         "--bg": "#f8fafc", "--tint1": "rgba(22,119,255,.04)", "--tint2": "rgba(22,119,255,.05)",
@@ -98,6 +101,9 @@ _PALETTES = {
         "--icon-neg-bg": "#ffebed", "--icon-neg": "#ff323c",
         "--card-shadow": "0 1px 2px rgba(15,23,42,.03),0 8px 22px rgba(15,23,42,.055)",
         "--card-shadow-hover": "0 2px 6px rgba(15,23,42,.06),0 14px 30px rgba(15,23,42,.10)",
+        "--bu-sg-bg": "#eaf8ee", "--bu-sg-tx": "#16853b", "--bu-sg-bd": "#cbeed5",
+        "--bu-cx-bg": "#fff0f1", "--bu-cx-tx": "#c52b35", "--bu-cx-bd": "#ffd4d8",
+        "--bu-wb-bg": "#fff6e8", "--bu-wb-tx": "#c76a00", "--bu-wb-bd": "#ffddaf",
     },
 }
 

@@ -89,7 +89,7 @@ def compute_and_log(agent_id: str, roster: pd.DataFrame, when: str | None = None
         vexp = names(lambda k, v: v["cat"] == "vexp" and baseline.get(k, {}).get("cat") == "mine")
         members = sum(v["mem"] for k, v in new.items() if v["cat"] == "mine" and k not in baseline)
         entry = {"date": stamp, "first": False, "signed": len(signed), "members": members,
-                 "lost": lost, "taken": taken, "vexp": vexp, "won": won}
+                 "signed_names": signed, "lost": lost, "taken": taken, "vexp": vexp, "won": won}
 
     base_p.write_text(json.dumps(new))
     log = _read(log_p, [])

@@ -413,33 +413,162 @@ def _stat(html: str) -> None:
     st.columns(3)[0].markdown(html, unsafe_allow_html=True)
 
 
+# ── Book Updates: summary cards + upload-history timeline ───────────────────────
+_BU_CHECK = ("<svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.2' stroke-linecap='round' "
+             "stroke-linejoin='round'><circle cx='12' cy='12' r='10'/><path d='M8 12.3l2.6 2.6L16 9.4'/></svg>")
+_BU_X = ("<svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.2' stroke-linecap='round' "
+         "stroke-linejoin='round'><circle cx='12' cy='12' r='10'/><path d='M15 9l-6 6M9 9l6 6'/></svg>")
+_BU_STAR = ("<svg viewBox='0 0 24 24' fill='currentColor' stroke='currentColor' stroke-width='1.1' "
+            "stroke-linejoin='round'><polygon points='12 2.6 14.9 8.6 21.5 9.3 16.5 13.9 18 20.5 12 17 6 20.5 7.5 13.9 2.5 9.3 9.1 8.6'/></svg>")
+_BU_FILE = ("<svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' "
+            "stroke-linejoin='round'><path d='M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z'/>"
+            "<polyline points='14 2 14 8 20 8'/></svg>")
+_BU_INFO = ("<svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' "
+            "stroke-linejoin='round'><circle cx='12' cy='12' r='10'/><line x1='12' y1='16' x2='12' y2='12'/>"
+            "<line x1='12' y1='8' x2='12.01' y2='8'/></svg>")
+_BU_UP = ("<svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' "
+          "stroke-linejoin='round'><path d='M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4'/>"
+          "<polyline points='7 10 12 15 17 10'/><line x1='12' y1='15' x2='12' y2='3'/></svg>")
+
+_BU_CSS = """<style>
+.bu-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:18px;margin:8px 0 30px;}
+.bu-sc{display:flex;align-items:center;gap:16px;background:var(--panel-solid);border:1px solid var(--border);
+ border-radius:16px;box-shadow:var(--card-shadow);padding:20px 22px;min-width:0;}
+.bu-sc-ic{width:52px;height:52px;flex:0 0 52px;border-radius:999px;display:grid;place-items:center;}
+.bu-sc-ic svg{width:24px;height:24px;}
+.bu-sc-l{font-size:13.5px;font-weight:650;color:var(--text);}
+.bu-sc-v{font-size:28px;font-weight:800;line-height:1;letter-spacing:-.02em;margin-top:4px;}
+.bu-sc-d{font-size:12.5px;color:var(--text2);margin-top:7px;}
+.bu-sc.sg .bu-sc-ic{background:var(--bu-sg-bg);color:var(--bu-sg-tx);} .bu-sc.sg .bu-sc-v{color:var(--bu-sg-tx);}
+.bu-sc.cx .bu-sc-ic{background:var(--bu-cx-bg);color:var(--bu-cx-tx);} .bu-sc.cx .bu-sc-v{color:var(--bu-cx-tx);}
+.bu-sc.wb .bu-sc-ic{background:var(--bu-wb-bg);color:var(--bu-wb-tx);} .bu-sc.wb .bu-sc-v{color:var(--bu-wb-tx);}
+.bu-sc.up .bu-sc-ic{background:var(--pill-bg);color:var(--accent-blue);} .bu-sc.up .bu-sc-v{color:var(--accent-blue);}
+.bu-tl{position:relative;padding-left:92px;}
+.bu-tl::before{content:"";position:absolute;top:26px;bottom:32px;left:15px;width:2px;background:var(--border);}
+.bu-item{position:relative;margin-bottom:20px;}
+.bu-dot{position:absolute;left:-85px;top:24px;width:16px;height:16px;border:4px solid var(--panel-solid);
+ border-radius:999px;background:var(--accent-blue);box-shadow:0 0 0 1px var(--pill-bd);z-index:2;}
+.bu-ic{position:absolute;left:-64px;top:8px;width:44px;height:44px;border-radius:999px;background:var(--pill-bg);
+ border:1px solid var(--pill-bd);color:var(--accent-blue);display:grid;place-items:center;z-index:2;}
+.bu-ic svg{width:20px;height:20px;}
+.bu-card{background:var(--panel-solid);border:1px solid var(--border);border-radius:16px;
+ box-shadow:var(--card-shadow);overflow:hidden;}
+.bu-hd{min-height:56px;display:flex;align-items:center;justify-content:space-between;gap:16px;
+ padding:14px 22px;border-bottom:1px solid var(--border);}
+.bu-hd-t{font-size:14.5px;font-weight:700;color:var(--text);}
+.bu-body{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));padding:20px 22px;}
+.bu-sec{min-width:0;padding:0 22px;}
+.bu-sec:first-child{padding-left:0;} .bu-sec:last-child{padding-right:0;}
+.bu-sec + .bu-sec{border-left:1px solid var(--border);}
+.bu-sh{display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap;}
+.bu-sh svg{width:18px;height:18px;flex:0 0 18px;}
+.bu-sl{font-size:13px;font-weight:700;color:var(--text);}
+.bu-cnt{font-size:12.5px;color:var(--text2);}
+.bu-pills{display:flex;flex-wrap:wrap;gap:7px;align-items:flex-start;}
+.bu-pill{display:inline-flex;align-items:center;padding:4px 10px;border-radius:999px;font-size:12px;
+ line-height:1.2;border:1px solid transparent;white-space:nowrap;max-width:100%;}
+.bu-pill.sg{color:var(--bu-sg-tx);background:var(--bu-sg-bg);border-color:var(--bu-sg-bd);}
+.bu-pill.cx{color:var(--bu-cx-tx);background:var(--bu-cx-bg);border-color:var(--bu-cx-bd);}
+.bu-pill.wb{color:var(--bu-wb-tx);background:var(--bu-wb-bg);border-color:var(--bu-wb-bd);}
+.bu-more{display:inline-block;}
+.bu-more>summary{list-style:none;cursor:pointer;color:var(--text2)!important;background:var(--input-bg)!important;border-color:var(--border)!important;}
+.bu-more>summary::-webkit-details-marker{display:none;} .bu-more>summary::marker{content:"";}
+.bu-empty{font-size:13px;color:var(--text2);}
+.bu-baseline{display:flex;align-items:center;gap:10px;margin:16px 22px 20px;padding:12px 14px;
+ background:var(--pill-bg);border:1px solid var(--pill-bd);border-radius:11px;color:var(--text);font-size:13px;}
+.bu-baseline svg{width:18px;height:18px;flex:0 0 18px;color:var(--accent-blue);}
+.bu-end{display:inline-flex;align-items:center;gap:7px;padding:8px 14px;color:var(--text2);
+ background:var(--input-bg);border:1px solid var(--border);border-radius:999px;font-size:12px;}
+@media(max-width:1100px){.bu-summary{grid-template-columns:repeat(2,minmax(0,1fr));}}
+@media(max-width:820px){.bu-summary{grid-template-columns:1fr;}.bu-body{grid-template-columns:1fr;}
+ .bu-sec{padding:16px 0;} .bu-sec:first-child{padding-top:0;} .bu-sec:last-child{padding-bottom:0;}
+ .bu-sec + .bu-sec{border-left:0;border-top:1px solid var(--border);}
+ .bu-ic{display:none;} .bu-tl{padding-left:30px;} .bu-tl::before{left:9px;} .bu-dot{left:-27px;}}
+</style>"""
+
+
+def _bu_esc(s) -> str:
+    return str(s).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+def _bu_names(names: list, cls: str) -> str:
+    names = [n for n in names if str(n).strip()]
+    if not names:
+        return '<div class="bu-empty">No changes</div>'
+    def pill(n):
+        return f'<span class="bu-pill {cls}">{_bu_esc(n)}</span>'
+    vis, rest = names[:6], names[6:]
+    out = "".join(pill(n) for n in vis)
+    if rest:
+        out += ('<details class="bu-more"><summary class="bu-pill">+' + str(len(rest)) +
+                ' more</summary><div class="bu-pills" style="margin-top:8px">'
+                + "".join(pill(n) for n in rest) + '</div></details>')
+    return f'<div class="bu-pills">{out}</div>'
+
+
+def _bu_section(icon: str, color: str, cls: str, label: str, counts: str, names: list) -> str:
+    head = (f'<div class="bu-sh"><span style="display:inline-flex;color:{color}">{icon}</span>'
+            f'<span class="bu-sl">{label}</span><span class="bu-cnt">· {counts}</span></div>')
+    return f'<div class="bu-sec">{head}{_bu_names(names, cls)}</div>'
+
+
+def _bu_cx_names(e: dict) -> list:
+    return list(e.get("lost", [])) + list(e.get("taken", [])) + list(e.get("vexp", []))
+
+
 def page_updates(tenant: dict, roster) -> None:
     st.title("Book Updates")
-    st.caption("What changed each time you uploaded — the same rundown you'd get by text.")
+    st.caption("Track changes each time you upload — the same rundown you'd get by text.")
+    st.markdown(_BU_CSS, unsafe_allow_html=True)
     hist = updates.history(tenant["agent_id"])
     if not hist:
         st.info("No updates yet — upload a HealthSherpa export and your summary shows up here.", icon="📥")
         return
-    for e in hist:
-        with st.container(border=True):
-            st.markdown(f"**📘 Book updated · {e.get('date', '')}**")
-            if e.get("first"):
-                st.caption("First upload — baseline set. Changes show here starting with your next upload.")
-                continue
-            st.markdown(f"✅ **Signed:** {e.get('signed', 0)} new policies / {e.get('members', 0)} members")
-            lost, taken = e.get("lost", []), e.get("taken", [])
-            vexp, won = e.get("vexp", []), e.get("won", [])
-            if not lost and not taken:
-                st.markdown("⬇️ **Lost 0 clients — all clear.**")
-            else:
-                if lost:
-                    st.markdown(f"⬇️ **Cancelled (→ Re-Engage):** {', '.join(lost)}")
-                if taken:
-                    st.markdown(f"🔻 **Taken by another agent:** {', '.join(taken)}")
-            if vexp:
-                st.markdown(f"⚠️ **Verification expired (still active, needs docs):** {', '.join(vexp)}")
-            if won:
-                st.markdown(f"🎉 **Won back:** {', '.join(won)}")
+
+    real = [e for e in hist if not e.get("first")]
+    signed_tot = sum(int(e.get("signed", 0) or 0) for e in real)
+    mem_tot = sum(int(e.get("members", 0) or 0) for e in real)
+    cx_tot = sum(len(_bu_cx_names(e)) for e in real)
+    wb_tot = sum(len(e.get("won", [])) for e in real)
+    total_updates = signed_tot + cx_tot + wb_tot
+
+    st.markdown(
+        '<div class="bu-summary">'
+        + f'<div class="bu-sc sg"><div class="bu-sc-ic">{_BU_CHECK}</div><div style="min-width:0">'
+          f'<div class="bu-sc-l">Signed</div><div class="bu-sc-v">{signed_tot:,}</div>'
+          f'<div class="bu-sc-d">new policies / {mem_tot:,} members</div></div></div>'
+        + f'<div class="bu-sc cx"><div class="bu-sc-ic">{_BU_X}</div><div style="min-width:0">'
+          f'<div class="bu-sc-l">Canceled (Re-Engage)</div><div class="bu-sc-v">{cx_tot:,}</div>'
+          f'<div class="bu-sc-d">policies</div></div></div>'
+        + f'<div class="bu-sc wb"><div class="bu-sc-ic">{_BU_STAR}</div><div style="min-width:0">'
+          f'<div class="bu-sc-l">Won Back</div><div class="bu-sc-v">{wb_tot:,}</div>'
+          f'<div class="bu-sc-d">policies</div></div></div>'
+        + f'<div class="bu-sc up"><div class="bu-sc-ic">{_BU_FILE}</div><div style="min-width:0">'
+          f'<div class="bu-sc-l">Total Updates</div><div class="bu-sc-v">{total_updates:,}</div>'
+          f'<div class="bu-sc-d">across all uploads</div></div></div>'
+        + '</div>', unsafe_allow_html=True)
+
+    cards = []
+    for e in reversed(hist):  # latest upload first
+        hd = f'<div class="bu-hd"><span class="bu-hd-t">📘 Book updated · {_bu_esc(e.get("date", ""))}</span></div>'
+        if e.get("first"):
+            body = ('<div class="bu-baseline">' + _BU_INFO
+                    + '<span>First upload — baseline set. Changes appear starting with your next upload.</span></div>')
+        else:
+            sg = _bu_section(_BU_CHECK, "var(--bu-sg-tx)", "sg", "Signed",
+                             f'{int(e.get("signed", 0) or 0)} new policies / {int(e.get("members", 0) or 0)} members',
+                             e.get("signed_names", []))
+            cxn = _bu_cx_names(e)
+            cx = _bu_section(_BU_X, "var(--bu-cx-tx)", "cx", "Canceled (Re-Engage)", f'{len(cxn)} policies', cxn)
+            won = e.get("won", [])
+            wb = _bu_section(_BU_STAR, "var(--bu-wb-tx)", "wb", "Won Back", f'{len(won)} policies', won)
+            body = f'<div class="bu-body">{sg}{cx}{wb}</div>'
+        cards.append(f'<div class="bu-item"><span class="bu-dot"></span>'
+                     f'<span class="bu-ic">{_BU_UP}</span><div class="bu-card">{hd}{body}</div></div>')
+
+    st.markdown('<div class="bu-tl">' + "".join(cards) + '</div>', unsafe_allow_html=True)
+    st.markdown('<div style="text-align:center;margin-top:8px"><span class="bu-end">▲ '
+                "You've reached the beginning</span></div>", unsafe_allow_html=True)
 
 
 def page_dashboard(tenant: dict, roster) -> None:
