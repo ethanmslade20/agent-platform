@@ -4,12 +4,7 @@ port = 8501
 
 [theme]
 base = "dark"
-primaryColor = "#1677ff"
+primaryColor = "#1455F5"  # BookPilot primary blue
 
 [browser]
 gatherUsageStats = false
-
-# TEMPORARY: surface the real traceback on the error page so the Cloud crash can be
-# diagnosed without dashboard log access. Revert to "none" once fixed.
-[client]
-showErrorDetails = "full"

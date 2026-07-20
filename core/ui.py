@@ -187,6 +187,44 @@ ICONS = {
     "gear":     '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>',
 }
 
+# ── BookPilot brand mark ──────────────────────────────────────────────────────
+# Inline SVG so the logo stays crisp at any size and tracks the theme. Kept in
+# sync with assets/brand/bookpilot-icon.svg (the standalone deliverable).
+_BRAND_N = [0]  # per-render id counter so multiple inline logos never collide
+
+
+def brand_icon_svg(px: int = 26) -> str:
+    """The BookPilot icon (open book + paper-airplane) as a scalable inline SVG."""
+    _BRAND_N[0] += 1
+    gid = f"bpPage{_BRAND_N[0]}"
+    return (
+        f'<svg width="{px}" height="{px}" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" '
+        f'role="img" aria-label="BookPilot" style="display:block;flex:0 0 auto;"><title>BookPilot</title>'
+        f'<defs><linearGradient id="{gid}" x1="0" y1="0" x2="0.35" y2="1">'
+        f'<stop offset="0" stop-color="#2474FF"/><stop offset="1" stop-color="#1455F5"/></linearGradient></defs>'
+        f'<path d="M32 25 L8.5 17 L5.5 43 L32 50 Z" fill="url(#{gid})"/>'
+        f'<path d="M32 25 L55.5 17 L58.5 43 L32 50 Z" fill="url(#{gid})"/>'
+        f'<path d="M32 25 L17 21 L19 46.5 L32 50 Z" fill="#06143D" fill-opacity="0.12"/>'
+        f'<path d="M32 25 L47 21 L45 46.5 L32 50 Z" fill="#06143D" fill-opacity="0.06"/>'
+        f'<path d="M32 25 L32 50" stroke="#06143D" stroke-opacity="0.22" stroke-width="1.4" stroke-linecap="round"/>'
+        # hairline navy edge so the white plane facet stays defined on a white surface
+        f'<path d="M32 11 L22.5 37 L32 31 Z" fill="#FFFFFF" stroke="#06143D" stroke-width="0.9" stroke-linejoin="round"/>'
+        f'<path d="M32 11 L41.5 37 L32 31 Z" fill="#06143D"/>'
+        f'</svg>')
+
+
+def brand_lockup(icon_px: int = 26, text_rem: float = 1.12,
+                 name_color: str = "var(--sidebar-text)", gap: int = 10,
+                 center: bool = False) -> str:
+    """Icon + 'BookPilot' wordmark (Book in name_color, Pilot in brand blue)."""
+    justify = "center" if center else "flex-start"
+    return (
+        f'<div style="display:flex;align-items:center;justify-content:{justify};gap:{gap}px;">'
+        f'{brand_icon_svg(icon_px)}'
+        f'<span style="font-size:{text_rem}rem;font-weight:800;letter-spacing:-.01em;color:{name_color};'
+        f'line-height:1;">Book<span style="color:#2474FF;">Pilot</span></span></div>')
+
+
 def inject_css():
     # Palette first (dark/light) so every var() below resolves for the active theme.
     st.markdown(theme_root_css(st.session_state.get("agent_theme", "dark")), unsafe_allow_html=True)

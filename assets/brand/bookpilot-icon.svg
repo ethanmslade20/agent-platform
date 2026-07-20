@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="BookPilot">
+  <title>BookPilot</title>
+  <defs>
+    <linearGradient id="bpPage" x1="0" y1="0" x2="0.35" y2="1">
+      <stop offset="0" stop-color="#2474FF"/>
+      <stop offset="1" stop-color="#1455F5"/>
+    </linearGradient>
+  </defs>
+  <!-- open book: left + right pages fanning up and out from a center spine -->
+  <path d="M32 25 L8.5 17 L5.5 43 L32 50 Z" fill="url(#bpPage)"/>
+  <path d="M32 25 L55.5 17 L58.5 43 L32 50 Z" fill="url(#bpPage)"/>
+  <!-- inner page shading near the spine for depth -->
+  <path d="M32 25 L17 21 L19 46.5 L32 50 Z" fill="#06143D" fill-opacity="0.12"/>
+  <path d="M32 25 L47 21 L45 46.5 L32 50 Z" fill="#06143D" fill-opacity="0.06"/>
+  <!-- center spine -->
+  <path d="M32 25 L32 50" stroke="#06143D" stroke-opacity="0.22" stroke-width="1.4" stroke-linecap="round"/>
+  <!-- navigation arrow / paper airplane rising from the book (hairline keeps the
+       white facet defined on a white surface) -->
+  <path d="M32 11 L22.5 37 L32 31 Z" fill="#FFFFFF" stroke="#06143D" stroke-width="0.9" stroke-linejoin="round"/>
+  <path d="M32 11 L41.5 37 L32 31 Z" fill="#06143D"/>
+</svg>
