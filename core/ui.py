@@ -140,6 +140,9 @@ def theme_root_css(theme: str) -> str:
                "[data-testid='stFileUploaderDropzone'] small{color:#64748b !important;}"
                "[data-testid='stFileUploaderDropzone'] button{background:#ffffff !important;"
                "color:#0f172a !important;border:1px solid #cbd5e1 !important;}"
+               # Uploaded-file row (name + size) below the dropzone — keep it readable
+               "[data-testid='stFileUploaderFile'] *{color:#334155 !important;}"
+               "[data-testid='stFileUploaderFileName']{color:#0f172a !important;font-weight:600;}"
                # Text inputs (search boxes, settings, mapping)
                "[data-testid='stTextInput'] [data-baseweb='input']{background:#ffffff !important;"
                "border:1px solid #cbd5e1 !important;}"

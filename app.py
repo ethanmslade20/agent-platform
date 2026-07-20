@@ -41,6 +41,14 @@ st.markdown(
       [data-testid="stToolbar"], [data-testid="stDecoration"], [data-testid="stStatusWidget"],
       [data-testid="stAppDeployButton"], [data-testid="stMainMenu"], #MainMenu, footer {display:none !important;}
       header[data-testid="stHeader"]{background:transparent !important;}
+      /* Primary (blue) buttons: force a white label on every page/theme. Otherwise
+         the light-mode markdown rules paint the label dark → unreadable on blue. */
+      button[kind="primary"], button[kind="primaryFormSubmit"],
+      [data-testid="stBaseButton-primary"], [data-testid="stBaseButton-primaryFormSubmit"],
+      button[kind="primary"] p, button[kind="primaryFormSubmit"] p,
+      [data-testid="stBaseButton-primary"] p, [data-testid="stBaseButton-primaryFormSubmit"] p,
+      [data-testid="stBaseButton-primary"] div, button[kind="primary"] div
+      {color:#fff !important; -webkit-text-fill-color:#fff !important;}
       .login-card{max-width:380px;margin:8vh auto 0}
       .brand-sub{color:#8a94a6;margin:.35rem 0 1.4rem;font-size:.95rem}
       .ws{color:#8a94a6;font-size:.85rem}
