@@ -829,11 +829,10 @@ _LOOKUP_CSS = """<style>
       background:var(--input-bg); border:1.5px solid rgba(96,165,250,.4);
       box-shadow:var(--card-shadow);}
   /* Force the typed text + selected value dark/readable in both themes (the exact
-     BaseWeb DOM path shifts between versions, so cover input + all select text). */
-  .st-key-lookup_hero div[data-baseweb="select"] *,
-  .st-key-lookup_hero input {
+     BaseWeb DOM path shifts between versions, so cover EVERYTHING in the hero). */
+  .st-key-lookup_hero *, .st-key-lookup_hero input {
       color:var(--text) !important; -webkit-text-fill-color:var(--text) !important;
-      font-weight:600 !important; opacity:1 !important;}
+      caret-color:var(--text) !important; opacity:1 !important;}
 </style>"""
 
 

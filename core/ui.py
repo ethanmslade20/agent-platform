@@ -117,7 +117,8 @@ def theme_root_css(theme: str) -> str:
     fix = ""
     if theme == "light":
         # Catch text that hardcodes a light color inline so it stays readable on white.
-        fix = ("[data-testid='stAppViewContainer'],[data-testid='stMarkdownContainer']{color:var(--text);}"
+        fix = ("html,body,[data-testid='stAppViewContainer']{color-scheme:light;}"
+               "[data-testid='stAppViewContainer'],[data-testid='stMarkdownContainer']{color:var(--text);}"
                "[data-testid='stAppViewContainer'] p{color:var(--text2);}"
                "[data-baseweb='select'] *{color:#0f172a !important;}"
                # Dropdown menus (selectbox/multiselect) render in a portal outside the app
