@@ -829,10 +829,16 @@ _LOOKUP_CSS = """<style>
       background:var(--input-bg); border:1.5px solid rgba(96,165,250,.4);
       box-shadow:var(--card-shadow);}
   /* Force the typed text + selected value dark/readable in both themes (the exact
-     BaseWeb DOM path shifts between versions, so cover EVERYTHING in the hero). */
-  .st-key-lookup_hero *, .st-key-lookup_hero input {
+     BaseWeb DOM path shifts between versions, so cover the value div/span + input). */
+  .st-key-lookup_hero div[data-baseweb="select"] div,
+  .st-key-lookup_hero div[data-baseweb="select"] span,
+  .st-key-lookup_hero div[data-baseweb="select"] input,
+  .st-key-lookup_hero input {
       color:var(--text) !important; -webkit-text-fill-color:var(--text) !important;
       caret-color:var(--text) !important; opacity:1 !important;}
+  /* When the selected value is auto-highlighted, keep it readable (dark on pale blue). */
+  .st-key-lookup_hero *::selection {
+      background:#cfe2ff !important; color:#0f172a !important; -webkit-text-fill-color:#0f172a !important;}
 </style>"""
 
 
@@ -903,7 +909,6 @@ def page_client_lookup(tenant: dict, roster) -> None:
         ui.stat_card("Net Premium / Mo", f"${prem:,.0f}" if pd.notna(prem) else "—", "dollar", ui.GREEN),
         ui.stat_card("Months on Book",
                      ("<1" if int(mob) == 0 else f"{int(mob)}") if pd.notna(mob) else "—", "calendar", ui.ELEC),
-        ui.stat_card("Est Commission / Yr", f"${_mem * 23 * 12:,.0f}" if is_active else "$0", "trend", ui.GOLD),
     ])
 
     # ── Contact ─────────────────────────────────────────────────────────────────
