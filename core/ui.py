@@ -114,55 +114,58 @@ def theme_root_css(theme: str) -> str:
     """The :root variable block for the active theme + a light-mode readability net."""
     p = _PALETTES.get(theme, _PALETTES["dark"])
     root = ";".join(f"{k}:{v}" for k, v in p.items())
-    fix = ""
-    if theme == "light":
-        # Catch text that hardcodes a light color inline so it stays readable on white.
-        fix = ("html,body,[data-testid='stAppViewContainer']{color-scheme:light;}"
-               "[data-testid='stAppViewContainer'],[data-testid='stMarkdownContainer']{color:var(--text);}"
-               "[data-testid='stAppViewContainer'] p{color:var(--text2);}"
-               "[data-baseweb='select'] *{color:#0f172a !important;}"
-               # Dropdown menus (selectbox/multiselect) render in a portal outside the app
-               # container, so they keep Streamlit's dark base — force them light here.
-               "[data-baseweb='popover'] [role='listbox'],[data-baseweb='popover'] ul,"
-               "[data-baseweb='menu'],[data-baseweb='menu'] ul{background:#ffffff !important;}"
-               "[data-baseweb='popover'] [role='option'],[data-baseweb='popover'] li,"
-               "[data-baseweb='menu'] li{background:#ffffff !important;color:#0f172a !important;}"
-               "[data-baseweb='popover'] [role='option']:hover,"
-               "[data-baseweb='popover'] [role='option'][aria-selected='true'],"
-               "[data-baseweb='popover'] li:hover,[data-baseweb='menu'] li:hover"
-               "{background:#eaf2ff !important;color:#0f172a !important;}"
-               # ── Native Streamlit widgets keep the dark base theme even in light
-               #    mode (config base is "dark"), so repaint them for light here. ──
-               # File uploaders (drop zone + "Browse files" button)
-               "[data-testid='stFileUploaderDropzone']{background:#f8fafc !important;"
-               "border:1.5px dashed #cbd5e1 !important;}"
-               "[data-testid='stFileUploaderDropzone'] *{color:#334155 !important;}"
-               "[data-testid='stFileUploaderDropzone'] small{color:#64748b !important;}"
-               "[data-testid='stFileUploaderDropzone'] button{background:#ffffff !important;"
-               "color:#0f172a !important;border:1px solid #cbd5e1 !important;}"
-               # Uploaded-file row (name + size) below the dropzone — keep it readable
-               "[data-testid='stFileUploaderFile'] *{color:#334155 !important;}"
-               "[data-testid='stFileUploaderFileName']{color:#0f172a !important;font-weight:600;}"
-               # Text inputs (search boxes, settings, mapping)
-               "[data-testid='stTextInput'] [data-baseweb='input']{background:#ffffff !important;"
-               "border:1px solid #cbd5e1 !important;}"
-               "[data-testid='stTextInput'] input{background:#ffffff !important;color:#0f172a !important;"
-               "-webkit-text-fill-color:#0f172a !important;caret-color:#0f172a !important;}"
-               "[data-testid='stTextInput'] input::placeholder{color:#94a3b8 !important;"
-               "-webkit-text-fill-color:#94a3b8 !important;}"
-               # Expander headers ("Add a commission statement", "View duplicates")
-               "[data-testid='stExpander'] details{border:1px solid #e2e8f0 !important;"
-               "background:#ffffff !important;}"
-               "[data-testid='stExpander'] summary{background:#f1f5f9 !important;}"
-               "[data-testid='stExpander'] summary *{color:#0f172a !important;}"
-               # Progress bar track (AEP renewal progress) — the visible track sits two
-               # levels under [role=progressbar]; the blue fill is one level deeper (kept).
-               "[data-testid='stProgress'] div[role='progressbar'],"
-               "[data-testid='stProgress'] div[role='progressbar'] > div > div{"
-               "background-color:#e2e8f0 !important;}")
-    # NOTE: st.data_editor / st.dataframe are canvas (glide-data-grid) widgets whose
-    # colors follow the config [theme] base only — CSS/--gdg-* vars are ignored at
-    # runtime, so those grids render dark in both themes. Left as-is by design.
+    # config [theme] base is "light" so the canvas data-grid (st.data_editor /
+    # st.dataframe) renders light. These rules re-skin the OTHER native widgets via
+    # CSS vars, so they follow the active agent_theme in BOTH light and dark. (In dark
+    # mode the canvas grid stays light — a glide-data-grid limitation CSS can't touch.)
+    cs = "light" if theme == "light" else "dark"
+    fix = (
+        f"html,body,[data-testid='stAppViewContainer']{{color-scheme:{cs};}}"
+        "[data-testid='stAppViewContainer'],[data-testid='stMarkdownContainer']{color:var(--text);}"
+        "[data-testid='stAppViewContainer'] p{color:var(--text2);}"
+        # selectbox / multiselect closed control + its text
+        "[data-testid='stSelectbox'] [data-baseweb='select']>div,"
+        "[data-testid='stMultiSelect'] [data-baseweb='select']>div{"
+        "background:var(--input-bg) !important;border-color:var(--border) !important;}"
+        "[data-baseweb='select'] *{color:var(--text) !important;}"
+        # dropdown menus render in a portal outside the app container
+        "[data-baseweb='popover'] [role='listbox'],[data-baseweb='popover'] ul,"
+        "[data-baseweb='menu'],[data-baseweb='menu'] ul{background:var(--panel-solid) !important;}"
+        "[data-baseweb='popover'] [role='option'],[data-baseweb='popover'] li,"
+        "[data-baseweb='menu'] li{background:var(--panel-solid) !important;color:var(--text) !important;}"
+        "[data-baseweb='popover'] [role='option']:hover,"
+        "[data-baseweb='popover'] [role='option'][aria-selected='true'],"
+        "[data-baseweb='popover'] li:hover,[data-baseweb='menu'] li:hover"
+        "{background:var(--hover) !important;color:var(--text) !important;}"
+        # file uploaders (drop zone + "Browse files" button + uploaded-file row)
+        "[data-testid='stFileUploaderDropzone']{background:var(--dt-head) !important;"
+        "border:1.5px dashed var(--border) !important;}"
+        "[data-testid='stFileUploaderDropzone'] *{color:var(--text2) !important;}"
+        "[data-testid='stFileUploaderDropzone'] small{color:var(--text3) !important;}"
+        "[data-testid='stFileUploaderDropzone'] button{background:var(--panel-solid) !important;"
+        "color:var(--text) !important;border:1px solid var(--border) !important;}"
+        "[data-testid='stFileUploaderFile'] *{color:var(--text2) !important;}"
+        "[data-testid='stFileUploaderFileName']{color:var(--text) !important;font-weight:600;}"
+        # text inputs (search boxes, settings, mapping)
+        "[data-testid='stTextInput'] [data-baseweb='input']{background:var(--input-bg) !important;"
+        "border:1px solid var(--border) !important;}"
+        # inner wrapper defaults to the light base bg — make it transparent so the outer
+        # (themed) bg shows through in both modes
+        "[data-testid='stTextInput'] [data-baseweb='base-input']{background:transparent !important;}"
+        "[data-testid='stTextInput'] input{background:var(--input-bg) !important;color:var(--text) !important;"
+        "-webkit-text-fill-color:var(--text) !important;caret-color:var(--text) !important;}"
+        "[data-testid='stTextInput'] input::placeholder{color:var(--text3) !important;"
+        "-webkit-text-fill-color:var(--text3) !important;}"
+        # expander headers
+        "[data-testid='stExpander'] details{border:1px solid var(--border) !important;"
+        "background:var(--panel-solid) !important;}"
+        "[data-testid='stExpander'] summary{background:var(--dt-head) !important;}"
+        "[data-testid='stExpander'] summary *{color:var(--text) !important;}"
+        # progress bar track (blue fill one level deeper is kept)
+        "[data-testid='stProgress'] div[role='progressbar'],"
+        "[data-testid='stProgress'] div[role='progressbar'] > div > div{"
+        "background-color:var(--progress-bg) !important;}"
+    )
     return f"<style>:root{{{root}}}{fix}</style>"
 
 ICONS = {

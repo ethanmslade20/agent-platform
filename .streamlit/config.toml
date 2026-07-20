@@ -3,7 +3,7 @@ address = "0.0.0.0"
 port = 8501
 
 [theme]
-base = "dark"
+base = "light"  # light-first; native widgets (incl. the data-grid) render light
 primaryColor = "#1455F5"  # BookPilot primary blue
 
 [browser]
