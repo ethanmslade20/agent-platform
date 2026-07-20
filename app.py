@@ -1922,18 +1922,24 @@ def page_aor(tenant: dict, roster) -> None:
             t = taken.copy()
             t["_mem"] = members.values
             t["Est $/yr"] = (t["_mem"] * 23 * 12).map(lambda v: f"${v:,.0f}")
-            # Days gone: counted from when we first detected the AOR change (the
-            # export gives no date). Sort freshest first — the newest steals are
-            # the most winnable (the client often doesn't know yet).
+            # The HealthSherpa export doesn't say WHEN an AOR change happened, so we
+            # can't show a true "days gone". Instead we count from when the agent
+            # first flagged the steal (first upload = "New"). That's honest and makes
+            # the freshest-at-top order meaningful — stale, un-called steals rise.
             t["_nk"] = ["".join(ch for ch in f"{f}{l}".lower() if ch.isalnum())
                         for f, l in zip(t.get("first_name", ""), t.get("last_name", ""))]
             _days = aor_track.days_gone(tenant["agent_id"], list(t["_nk"]))
             t["_days"] = t["_nk"].map(_days).fillna(0).astype(int)
             t = t.sort_values("_days", ascending=True)
+            if bool((t["_days"] == 0).all()):  # no aging yet — first upload / all fresh
+                st.info("First upload, so every steal below is marked **New** — the export doesn't "
+                        "include the date each AOR change happened. Keep uploading and we'll show how "
+                        "long each has been flagged, so stale un-called steals float to the top.",
+                        icon="🆕")
             show = pd.DataFrame({
                 "Client": (t["first_name"].fillna("") + " " + t["last_name"].fillna("")).str.strip().str.title(),
                 "Taken By": t.get("taken_by", ""),
-                "Days Gone": t["_days"].map(lambda d: "new" if d == 0 else f"{d}d"),
+                "Flagged": t["_days"].map(lambda d: "New" if d == 0 else f"{d}d ago"),
                 "Carrier": t.get("carrier", ""),
                 "State": t.get("state", ""),
                 "Members": t["_mem"].astype(int),
@@ -1941,8 +1947,9 @@ def page_aor(tenant: dict, roster) -> None:
                 "Phone": t.get("phone", ""),
             })
             ui.styled_table(show, height=min(46 + 35 * max(len(show), 1), 560), bare=True)
-            st.caption("**Days Gone** counts from when the agent first saw the AOR change — "
-                       "freshest at the top (most winnable). It builds over time as you upload.")
+            st.caption("**Flagged** = when you first saw the steal in your book — the export has no "
+                       "AOR-change date. Freshest at the top (most winnable); it fills in as you keep "
+                       "uploading.")
 
 
 def page_verifications(tenant: dict, roster) -> None:
