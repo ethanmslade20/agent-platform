@@ -677,8 +677,7 @@ def page_daily(tenant: dict, roster) -> None:
 
     months_av = daily.months_available(roster)
     if not months_av:
-        st.caption("Daily breakdown appears once you've signed new clients across a month.")
-        return
+        st.info("No dated policies to chart yet."); return
     labels = {pd.Timestamp(m + "-01").strftime("%B %Y"): m for m in months_av}
     ym = labels[st.selectbox("Select month", list(labels))]
 
