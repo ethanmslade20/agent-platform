@@ -2155,7 +2155,7 @@ def workspace() -> None:
     with st.sidebar:
         st.markdown(
             f'<div style="padding:2px 2px 0;" aria-label="{APP_NAME}">'
-            f'{ui.brand_lockup(icon_px=26, text_rem=1.12)}</div>',
+            f'{ui.brand_lockup(icon_px=34, text_rem=1.42, gap=11)}</div>',
             unsafe_allow_html=True)
         st.caption(tenant.get("name") or tenant.get("username"))
         _nav_css()
