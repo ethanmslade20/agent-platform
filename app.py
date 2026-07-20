@@ -33,6 +33,14 @@ st.markdown(
     """
     <style>
       [data-testid="stSidebarNav"]{display:none}
+      /* Hide Streamlit's in-app chrome on EVERY page so the product reads clean for
+         end users: the top-right toolbar / Deploy button / ⋮ menu, and the footer
+         "Hosted with Streamlit" badge. (The Cloud owner's Share/Manage-app controls
+         are platform chrome outside the app and are only shown to the logged-in
+         owner — regular visitors never see them.) */
+      [data-testid="stToolbar"], [data-testid="stDecoration"], [data-testid="stStatusWidget"],
+      [data-testid="stAppDeployButton"], [data-testid="stMainMenu"], #MainMenu, footer {display:none !important;}
+      header[data-testid="stHeader"]{background:transparent !important;}
       .login-card{max-width:380px;margin:8vh auto 0}
       .brand-sub{color:#8a94a6;margin:.35rem 0 1.4rem;font-size:.95rem}
       .ws{color:#8a94a6;font-size:.85rem}
