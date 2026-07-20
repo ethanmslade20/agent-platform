@@ -241,22 +241,24 @@ def inject_css():
       .brand-row .brand-logo svg {{ width: 18px; height: 18px; stroke: #fff; fill: none; stroke-width: 2.2; }}
       .brand-row .brand-text {{ font-size: 1.12rem; font-weight: 800; letter-spacing: -0.01em; color: var(--sidebar-text); }}
       /* Sidebar buttons */
-      [data-testid="stSidebar"] .stButton > button {{
-        background: linear-gradient(90deg, {BLUE}, {PURPLE});
-        color: #fff; border: none; border-radius: 12px; font-weight: 600;
-        box-shadow: 0 8px 22px rgba(59,130,246,0.28);
-        transition: filter .15s ease, transform .15s ease;
-      }}
-      [data-testid="stSidebar"] .stButton > button:hover {{
-        filter: brightness(1.08); transform: translateY(-1px);
-      }}
+      /* Sidebar buttons — clean themed secondary (readable in light + dark) */
+      [data-testid="stSidebar"] .stButton > button,
       [data-testid="stSidebar"] [data-testid="stDownloadButton"] > button {{
-        background: rgba(15,28,52,0.6); color: #cbd5e1;
-        border: 1px solid rgba(96,165,250,0.32); border-radius: 12px; font-weight: 600;
-        box-shadow: none;
+        background: var(--input-bg) !important; color: var(--text) !important;
+        border: 1px solid var(--border) !important; border-radius: 12px !important;
+        font-weight: 600 !important; box-shadow: none !important;
+        transition: border-color .15s ease, background .15s ease;
       }}
+      [data-testid="stSidebar"] .stButton > button:hover,
       [data-testid="stSidebar"] [data-testid="stDownloadButton"] > button:hover {{
-        border-color: rgba(96,165,250,0.6); color: #fff;
+        border-color: var(--accent-blue) !important; background: var(--hover) !important;
+        color: var(--text) !important;
+      }}
+      /* Log out — subtle red accent (wrapped in st.container(key="logoutbtn")) */
+      [data-testid="stSidebar"] .st-key-logoutbtn button {{ color: var(--neg) !important; }}
+      [data-testid="stSidebar"] .st-key-logoutbtn button:hover {{
+        border-color: var(--neg) !important; background: rgba(255,50,60,0.08) !important;
+        color: var(--neg) !important;
       }}
     
       /* ── Dashboard header + topbar ── */

@@ -4,6 +4,7 @@ port = 8501
 
 [theme]
 base = "dark"
+primaryColor = "#1677ff"
 
 [browser]
 gatherUsageStats = false

@@ -1989,9 +1989,10 @@ def workspace() -> None:
             st.cache_data.clear()
             st.toast("Data refreshed.")
             st.rerun()
-        if st.button("Log out", use_container_width=True):
-            st.session_state.tenant = None
-            st.rerun()
+        with st.container(key="logoutbtn"):
+            if st.button("Log out", use_container_width=True):
+                st.session_state.tenant = None
+                st.rerun()
 
     if page == "Upload":
         page_upload(tenant)
