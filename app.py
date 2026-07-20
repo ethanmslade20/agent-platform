@@ -954,7 +954,7 @@ def page_client_lookup(tenant: dict, roster) -> None:
     svi = 0 if pd.isna(svi_n) else int(svi_n)
     if dmi or svi:
         st.warning(f"📎 Outstanding verification docs: {dmi} DMI, {svi} SVI — their subsidy is at "
-                   "risk until submitted (see Verifications).", icon="⚠️")
+                   "risk until submitted (see Documents Due).", icon="⚠️")
 
     # ── Policies (history) ──────────────────────────────────────────────────────
     with st.container(border=True):
@@ -1966,8 +1966,8 @@ def page_aor(tenant: dict, roster) -> None:
 
 
 def page_verifications(tenant: dict, roster) -> None:
-    st.title("Verifications")
-    st.caption("HealthSherpa verifications your clients still owe. **DMI** = income/coverage match; "
+    st.title("Documents Due")
+    st.caption("Verification documents your clients still owe HealthSherpa. **DMI** = income/coverage match; "
                "**SVI** = enrollment verification. If one **expires, the client loses their premium "
                "subsidy** and usually drops. **Open** ones are still savable — reach out before they expire.")
     st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
@@ -2041,7 +2041,7 @@ def page_pastdue(tenant: dict, roster) -> None:
 # (nth-of-type), so keep group starts at positions 1 / 4 / 7 / 9 and the
 # Upload+Settings pair last (13, 14).
 _NAV = ["Dashboard", "Book Updates",                                    # OVERVIEW
-        "AOR Defense", "Re-Engage", "Past Due Premium", "Verifications", "AEP Tracker",  # WORK LISTS
+        "AOR Defense", "Re-Engage", "Past Due Premium", "Documents Due", "AEP Tracker",  # WORK LISTS
         "Book", "Client Lookup",                                        # MY BOOK
         "Daily Tracker", "Goals", "Monthly Trends", "Commissions",      # PERFORMANCE & PAY
         "Upload", "Settings"]                                           # ADMIN
@@ -2050,7 +2050,7 @@ _PAGES = {
     "Dashboard": page_dashboard, "Book Updates": page_updates, "Daily Tracker": page_daily,
     "Goals": page_goals, "Client Lookup": page_client_lookup, "Book": page_book,
     "Monthly Trends": page_trends, "Commissions": page_commissions, "Past Due Premium": page_pastdue,
-    "AOR Defense": page_aor, "Verifications": page_verifications,
+    "AOR Defense": page_aor, "Documents Due": page_verifications,
     "Re-Engage": page_losses, "AEP Tracker": page_aep, "Settings": page_settings,
 }
 _NO_ROSTER = {"Upload", "Settings", "Book Updates"}
