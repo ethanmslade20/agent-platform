@@ -1910,7 +1910,20 @@ def page_losses(tenant: dict, roster) -> None:
         st.success("No cancelled or terminated clients — everyone's still active. 🎉"); return
 
     lost["term_date"] = pd.to_datetime(lost.get("term_date"), errors="coerce")
-    lost["days_since_lost"] = (today_ts - lost["term_date"]).dt.days.clip(lower=0)
+
+    # An "estimated" term date is the day we FIRST noticed a client had gone missing
+    # from the carrier portal — NOT a confirmed cancellation date. On a first upload a
+    # whole backlog of past cancellations all get stamped with the upload day, which
+    # would flood this list with false "lost today / <30 days" flags. For an estimated
+    # date the true loss date is unknown, so keep the client on the list but show the
+    # date as Unknown and leave them out of the recency (<30/60/90) buckets.
+    def _as_bool(v) -> bool:
+        if isinstance(v, bool):
+            return v
+        return str(v).strip().lower() in ("true", "1", "yes", "t")
+    est = lost.get("term_estimated", pd.Series(False, index=lost.index)).apply(_as_bool)
+    lost["_lost_on"] = lost["term_date"].mask(est)      # NaT where the date is only a guess
+    lost["days_since_lost"] = (today_ts - lost["_lost_on"]).dt.days.clip(lower=0)
 
     def _urgency(days):
         if pd.isna(days):
@@ -1954,12 +1967,17 @@ def page_losses(tenant: dict, roster) -> None:
     view = view.sort_values("days_since_lost", ascending=True, na_position="last")
 
     st.caption(f"Showing **{len(view)}** clients · {wlabel.lower()}")
+    n_unknown = int(view["_lost_on"].isna().sum())
+    if n_unknown:
+        st.caption(f"ℹ️ {n_unknown:,} of these have no confirmed cancel date — the carrier portal "
+                   f"just showed them gone, so we can't say exactly when. They're marked "
+                   f"**Unknown** (not lost today) and only appear under *All time*.")
     if view.empty:
         st.info("No clients match the current filters."); return
     show = pd.DataFrame({
         "Name": (view["first_name"].fillna("") + " " + view["last_name"].fillna("")).str.strip().str.title(),
         "Urgency": view["Urgency"],
-        "Lost": view["term_date"].apply(_rel_day),
+        "Lost": view["_lost_on"].apply(_rel_day),
         "Carrier": view["carrier"],
         "State": view["state"],
         "Members": pd.to_numeric(view.get("applicant_count"), errors="coerce").fillna(1).clip(lower=1).astype(int),
