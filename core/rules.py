@@ -74,7 +74,13 @@ def apply_book_rules(roster: pd.DataFrame, npn: str = "", name: str = "") -> pd.
                 if col in df.columns else pd.Series(0.0, index=df.index))
 
     # ── Verification expired → Cancelled ──────────────────────────────────────
-    vexp = (_num("dmi_expired") > 0) | (_num("svi_expired") > 0)
+    # ...but NOT for brand-new business whose coverage hasn't started yet (future
+    # effective date). A pre-effective new enrollment with an expired DMI/SVI just
+    # owes a document — it belongs on Documents Due, not marked as a lost client.
+    _eff = (pd.to_datetime(df["effective_date"], errors="coerce")
+            if "effective_date" in df.columns else pd.Series(pd.NaT, index=df.index))
+    _today = pd.Timestamp.today().normalize()
+    vexp = ((_num("dmi_expired") > 0) | (_num("svi_expired") > 0)) & ~(_eff > _today)
     df.loc[vexp, "status"] = "Cancelled"
     df.loc[vexp, "cancel_reason"] = REASON_VEXP
 

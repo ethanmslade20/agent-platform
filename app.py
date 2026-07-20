@@ -366,7 +366,8 @@ def page_upload(tenant: dict) -> None:
                 else:
                     roster = ingest_service.build_book(agent_id, tenant.get("npn", ""), tenant.get("name", ""))
                     if roster is not None:
-                        updates.compute_and_log(agent_id, roster)
+                        updates.compute_and_log(agent_id, roster,
+                                                npn=tenant.get("npn", ""), name=tenant.get("name", ""))
                     st.success(f"Done — read {len(df):,} rows. Taking you to your **Book Updates**…")
                     st.session_state["_pending_nav"] = "Book Updates"
                     st.rerun()
@@ -396,7 +397,8 @@ def page_upload(tenant: dict) -> None:
                             _snap, sdf = ingest_service.ingest_state_exchange(agent_id, sup.getvalue(), skey)
                             roster = ingest_service.build_book(agent_id, tenant.get("npn", ""), tenant.get("name", ""))
                             if roster is not None:
-                                updates.compute_and_log(agent_id, roster)
+                                updates.compute_and_log(agent_id, roster,
+                                                        npn=tenant.get("npn", ""), name=tenant.get("name", ""))
                         st.success(f"Added — {len(sdf):,} enrolled clients merged. Your update summary "
                                    f"is on the **Book Updates** page.")
                         st.session_state["_pending_nav"] = "Book Updates"

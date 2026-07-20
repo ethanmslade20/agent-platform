@@ -24,8 +24,25 @@ def _key(first, last) -> str:
     return re.sub(r"[^a-z]", "", s)
 
 
-def _book_state(roster: pd.DataFrame) -> dict:
-    """name_key -> {cat, name, mem}. cat = mine / lost / taken / vexp."""
+def _is_foreign_aor(aor: str, npn: str, name_parts: list) -> bool:
+    """True if the agent-of-record is someone else — same logic as views.aor_taken."""
+    al = str(aor or "").lower()
+    if not al.strip() or "none" in al:
+        return False
+    if npn and str(npn) in str(aor):          # still me (my NPN)
+        return False
+    if name_parts and all(p in al for p in name_parts):
+        return False
+    return True
+
+
+def _book_state(roster: pd.DataFrame, npn: str = "", name: str = "") -> dict:
+    """name_key -> {cat, name, mem}. cat = mine / lost / taken / vexp.
+
+    "taken" is decided from policy_aor (a foreign agent of record) — the same field
+    the AOR at Risk page uses — so an active-but-taken client reads as taken and a
+    win-back (taken -> mine) is detectable. cancel_reason==AOR taken is also honored."""
+    name_parts = [p for p in (name or "").lower().split() if p]
     out = {}
     for _, r in roster.iterrows():
         k = _key(r.get("first_name", ""), r.get("last_name", ""))
@@ -33,10 +50,10 @@ def _book_state(roster: pd.DataFrame) -> dict:
             continue
         status = str(r.get("status") or "")
         reason = str(r.get("cancel_reason") or "")
-        if status in ACTIVE:
-            cat = "mine"
-        elif reason == REASON_TAKEN:
+        if _is_foreign_aor(r.get("policy_aor", ""), npn, name_parts) or reason == REASON_TAKEN:
             cat = "taken"
+        elif status in ACTIVE:
+            cat = "mine"
         elif reason == REASON_VEXP:
             cat = "vexp"
         elif status in CHURNED:
@@ -68,12 +85,13 @@ def _ensure(agent_id: str, p) -> None:
         store.hydrate(agent_id, paths.tenant_root(agent_id))
 
 
-def compute_and_log(agent_id: str, roster: pd.DataFrame, when: str | None = None) -> dict:
+def compute_and_log(agent_id: str, roster: pd.DataFrame, when: str | None = None,
+                    npn: str = "", name: str = "") -> dict:
     """Diff the new book vs the last upload, append a summary entry, reset baseline."""
     paths.ensure_dirs(agent_id)
     base_p, log_p = _paths(agent_id)
     _ensure(agent_id, base_p)
-    new = _book_state(roster)
+    new = _book_state(roster, npn, name)
     baseline = _read(base_p, None)
     stamp = when or dt.datetime.now().strftime("%b %d, %Y · %-I:%M %p")
 
