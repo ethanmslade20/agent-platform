@@ -34,14 +34,18 @@ st.markdown(
     <style>
       [data-testid="stSidebarNav"]{display:none}
       /* Hide Streamlit's in-app chrome on EVERY page so the product reads clean for
-         end users: the Deploy button, the ⋮ menu, the status widget, and the footer
-         "Hosted with Streamlit" badge. NOTE: hide only these specific buttons — NOT
-         the whole stToolbar, because the sidebar's reopen control (stExpandSidebarButton)
-         lives inside the toolbar; hiding the toolbar trapped a collapsed sidebar with
-         no way to reopen it. (The Cloud owner's Share/Manage-app controls are platform
-         chrome outside the app, shown only to the logged-in owner — visitors never see them.) */
+         end users: the Deploy button, the ⋮ menu, the "Fork"/view-source action buttons
+         (stToolbarActions — these DO show to every visitor on Community Cloud), the status
+         widget, and the footer "Hosted with Streamlit" badge. NOTE: hide only these
+         specific elements — NOT the whole stToolbar, because the sidebar's reopen control
+         (stExpandSidebarButton) is a sibling inside the toolbar; hiding the toolbar trapped
+         a collapsed sidebar with no way to reopen it. (The Community Cloud OWNER overlay —
+         Share / Manage-app / the top-right admin icons — is rendered by the outer host
+         shell OUTSIDE the app iframe and is gated to the logged-in owner; visitors never
+         see it and app CSS cannot reach it.) */
       [data-testid="stDecoration"], [data-testid="stStatusWidget"],
-      [data-testid="stAppDeployButton"], [data-testid="stMainMenu"], #MainMenu, footer {display:none !important;}
+      [data-testid="stAppDeployButton"], [data-testid="stMainMenu"],
+      [data-testid="stToolbarActions"], #MainMenu, footer {display:none !important;}
       header[data-testid="stHeader"]{background:transparent !important;}
       /* the sidebar reopen control (shows when collapsed) — make it on-brand, not a
          washed-out grey box. NB: stExpandSidebarButton IS the <button>; its children
@@ -2175,7 +2179,7 @@ def workspace() -> None:
     with st.sidebar:
         st.markdown(
             f'<div style="padding:2px 2px 0;" aria-label="{APP_NAME}">'
-            f'{ui.brand_lockup(icon_px=34, text_rem=1.42, gap=11)}</div>',
+            f'{ui.brand_lockup(icon_px=44, text_rem=1.74, gap=12)}</div>',
             unsafe_allow_html=True)
         st.caption(tenant.get("name") or tenant.get("username"))
         _nav_css()
