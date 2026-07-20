@@ -675,9 +675,13 @@ def page_daily(tenant: dict, roster) -> None:
     if roster is None:
         _need_book(); return
 
-    # ── All-time personal bests ───────────────────────────────────────────────
-    best_day, best_week, best_month = daily.personal_bests(roster)
+    aid = tenant["agent_id"]
+    # ── All-time personal bests (new business only — renewals excluded) ────────
+    best_day, best_week, best_month = daily.personal_bests(roster, aid)
     _hdr("🏆 Personal Bests — New Business (All Time)", "trend")
+    st.caption("First-time sign-ups only — Open-Enrollment renewals are excluded using your "
+               "snapshot history and carrier books. Detection sharpens as you upload each month "
+               "and add carrier books.")
     for col, title, rec in zip(st.columns(3), ["Best Day", "Best Week", "Best Month"],
                                [best_day, best_week, best_month]):
         with col, st.container(border=True):
@@ -694,13 +698,13 @@ def page_daily(tenant: dict, roster) -> None:
             else:
                 st.markdown("—")
 
-    months_av = daily.months_available(roster)
+    months_av = daily.months_available(roster, aid)
     if not months_av:
         st.info("No dated policies to chart yet."); return
     labels = {pd.Timestamp(m + "-01").strftime("%B %Y"): m for m in months_av}
     ym = labels[st.selectbox("Select month", list(labels))]
 
-    ddf = daily.daily_counts(roster, ym)
+    ddf = daily.daily_counts(roster, ym, aid)
     year, mnum = int(ym[:4]), int(ym[5:7])
     dim = calendar.monthrange(year, mnum)[1]
     today = dt.date.today()
