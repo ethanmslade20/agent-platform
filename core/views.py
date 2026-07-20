@@ -25,15 +25,31 @@ def active(roster: pd.DataFrame) -> pd.DataFrame:
     return roster[roster["status"].isin(ACTIVE)].copy()
 
 
+def _as_bool(v) -> bool:
+    """Parse a flag that may be a real bool (local parquet) or text ('TRUE'/'FALSE'
+    from the DB / Google Sheets). A plain .astype(bool) treats 'FALSE' as True."""
+    if isinstance(v, bool):
+        return v
+    return str(v).strip().lower() in ("true", "1", "yes", "t")
+
+
 def losses(roster: pd.DataFrame) -> pd.DataFrame:
     """Genuine cancellations/terminations — the re-engage list. Excludes clients
     who churned only because they were taken by another agent or lost a
-    verification (those have their own pages), matching Ethan's site."""
+    verification (those have their own pages), matching Ethan's site.
+
+    Also excludes UNCONFIRMED cancellations (term_estimated=True). A client who is
+    still active in HealthSherpa but merely absent from an uploaded carrier-portal
+    export gets flagged Cancelled with a *guessed* date — those are frequently still
+    active, so they must not land on an outreach list. Re-Engage = confirmed losses
+    only (a real cancel date), never a portal-absence guess."""
     churned = roster[roster["status"].isin(LOST)]
     if "cancel_reason" in churned.columns:
         # Plan switches are retained clients (moved to a newer plan), not losses.
         churned = churned[~churned["cancel_reason"].isin(
             ["AOR taken", "Verification expired", "Plan switch"])]
+    if "term_estimated" in churned.columns:
+        churned = churned[~churned["term_estimated"].apply(_as_bool)]
     return churned.copy()
 
 

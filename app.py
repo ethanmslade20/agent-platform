@@ -1969,9 +1969,8 @@ def page_losses(tenant: dict, roster) -> None:
     st.caption(f"Showing **{len(view)}** clients · {wlabel.lower()}")
     n_unknown = int(view["_lost_on"].isna().sum())
     if n_unknown:
-        st.caption(f"ℹ️ {n_unknown:,} of these have no confirmed cancel date — the carrier portal "
-                   f"just showed them gone, so we can't say exactly when. They're marked "
-                   f"**Unknown** (not lost today) and only appear under *All time*.")
+        st.caption(f"ℹ️ {n_unknown:,} of these don't have an exact cancel date on file, "
+                   f"so they're marked **Unknown** and only appear under *All time*.")
     if view.empty:
         st.info("No clients match the current filters."); return
     show = pd.DataFrame({
