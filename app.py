@@ -18,11 +18,10 @@ from core import (aor_track, carrier_names, charts, commissions_ingest, daily, d
 # The on-screen wordmark is the fixed two-tone BookPilot logo (see ui.brand_lockup).
 APP_NAME = "BookPilot"
 
-# Favicon: a raster PNG (Pillow can open it on every host, unlike SVG) with an emoji
-# fallback, so a missing/unsupported icon can never crash set_page_config — which runs
-# at module top, so a failure there takes the whole app down ("Oh no. Error running app").
-_ICON = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "brand", "favicon.png")
-st.set_page_config(page_title=APP_NAME, page_icon=(_ICON if os.path.exists(_ICON) else "🧭"), layout="wide")
+# Favicon: emoji only — the safest possible module-top value (no file / no Pillow /
+# no path). set_page_config runs at import, so any failure here takes the WHOLE app
+# down ("Oh no."). A local image favicon can be reintroduced once confirmed stable.
+st.set_page_config(page_title=APP_NAME, page_icon="🧭", layout="wide")
 
 ui.inject_css()  # Ethan's midnight-fintech theme (cards, sidebar, typography)
 st.markdown(
