@@ -43,6 +43,12 @@ def _book_state(roster: pd.DataFrame, npn: str = "", name: str = "") -> dict:
     the AOR at Risk page uses — so an active-but-taken client reads as taken and a
     win-back (taken -> mine) is detectable. cancel_reason==AOR taken is also honored."""
     name_parts = [p for p in (name or "").lower().split() if p]
+    # We can only call an AOR "someone else's" if we know who THIS agent is. With no
+    # NPN and no name to match on, every populated policy_aor looks foreign and the
+    # WHOLE book reads as "taken" (blank-NPN tenants got wrecked this way). When we
+    # can't judge identity, fall back to status-only and trust only an explicit
+    # cancel_reason of "AOR taken".
+    can_judge_aor = bool(str(npn).strip()) or bool(name_parts)
     out = {}
     for _, r in roster.iterrows():
         k = _key(r.get("first_name", ""), r.get("last_name", ""))
@@ -50,7 +56,8 @@ def _book_state(roster: pd.DataFrame, npn: str = "", name: str = "") -> dict:
             continue
         status = str(r.get("status") or "")
         reason = str(r.get("cancel_reason") or "")
-        if _is_foreign_aor(r.get("policy_aor", ""), npn, name_parts) or reason == REASON_TAKEN:
+        foreign = can_judge_aor and _is_foreign_aor(r.get("policy_aor", ""), npn, name_parts)
+        if foreign or reason == REASON_TAKEN:
             cat = "taken"
         elif status in ACTIVE:
             cat = "mine"

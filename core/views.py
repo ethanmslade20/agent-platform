@@ -59,6 +59,14 @@ def aor_taken(roster: pd.DataFrame, npn: str = "", name: str = "") -> pd.DataFra
     aor = roster["policy_aor"].fillna("").astype(str)
     parts = [p for p in (name or "").lower().split() if p]
 
+    # Without an NPN or name to match on, we can't tell "someone else" from "me" —
+    # every populated AOR would look foreign and the whole book would read as taken.
+    # Return nothing rather than falsely flag everyone.
+    if not str(npn).strip() and not parts:
+        out = roster.iloc[0:0].copy()
+        out["taken_by"] = pd.Series(dtype=str)
+        return out
+
     def is_foreign(a: str) -> bool:
         al = a.lower()
         if not a.strip() or "none" in al:
