@@ -50,7 +50,20 @@ def compute(agent_id: str, roster=None) -> dict | None:
         "added": added,
         "lost": lost,
         "net_growth": (added - lost) if (added is not None and lost is not None) else None,
-        "churn": (lost / policies * 100) if (lost is not None and policies) else None,
+        # Member-months churn — the "proper" definition: total members lost across
+        # all months / total active member-months. Matches the personal tracker AND
+        # this app's own Goals/LTV pages. The old avg-lost / current-book ratio
+        # understates churn ~2x while a book is still growing fast (today's stock is
+        # far bigger than the historical exposure that produced the losses), so it
+        # would overstate lifetime value. Falls back to it only if the MoM table is
+        # unavailable.
+        "churn": (
+            float(mom["Members Lost"].sum()) / float(mom["Total Members"].sum()) * 100
+            if (mom is not None and not mom.empty
+                and "Members Lost" in mom.columns and "Total Members" in mom.columns
+                and float(mom["Total Members"].sum()) > 0)
+            else ((lost / policies * 100) if (lost is not None and policies) else None)
+        ),
         "m_added": m_added,
         "m_lost": m_lost,
         "net_members": (m_added - m_lost) if (m_added is not None and m_lost is not None) else None,
