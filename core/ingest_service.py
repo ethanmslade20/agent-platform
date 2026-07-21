@@ -305,26 +305,33 @@ def build_book(agent_id: str, npn: str = "", name: str = ""):
 
 
 def _auto_seed_appointments(agent_id: str, roster) -> None:
-    """On the very first upload (no appointments configured yet), turn on every
-    state + carrier found in the agent's book, so they start with their real book
-    instead of a blank filter. Runs ONCE — the `appointments_initialized` flag then
-    keeps it from re-adding anything the agent later toggles off in Settings."""
+    """Keep the agent's appointments in sync with the carriers/states ACTUALLY in
+    their book, so the appointment filter never silently drops a client on a carrier
+    or state that first appeared AFTER the initial upload (which is how ~53 of Ethan's
+    active clients — Florida Blue, Alliant, CareSource, even some Ambetter/BCBS/UHC —
+    were vanishing). Runs every build and UNIONs any new (state, carrier) found into
+    the existing appointments — it only ever GROWS the turned-on set to match the real
+    book, never removes. Carriers with no known brand fall back to their raw name so
+    they still match. Client-level hiding stays available via exclusions."""
     from core import settings, carrier_names
-    cfg = settings.get(agent_id)
-    if cfg.get("appointments") or cfg.get("appointments_initialized"):
-        return  # already set up (auto or by hand) — respect the agent's choices
     if roster is None or roster.empty or not {"state", "carrier"}.issubset(roster.columns):
         return
-    derived = {}
+    cfg = settings.get(agent_id)
+    appts = {str(k).upper(): list(v or []) for k, v in (cfg.get("appointments") or {}).items()}
+    changed = False
     for st, sub in roster.groupby(roster["state"].astype(str).str.upper().str.strip()):
         st = str(st).strip()
         if not st or st == "NAN":
             continue
-        brands = sorted({carrier_names.brand_of(c) for c in sub["carrier"].dropna()
-                         if carrier_names.brand_of(c)})
-        if brands:
-            derived[st] = brands
-    settings.save(agent_id, {**cfg, "appointments": derived, "appointments_initialized": True})
+        brands = {(carrier_names.brand_of(c) or str(c).strip())
+                  for c in sub["carrier"].dropna() if str(c).strip()}
+        brands = {b for b in brands if b}
+        have = set(appts.get(st, []))
+        if brands - have:
+            appts[st] = sorted(have | brands)
+            changed = True
+    if changed or not cfg.get("appointments_initialized"):
+        settings.save(agent_id, {**cfg, "appointments": appts, "appointments_initialized": True})
 
 
 def _apply_carrier_truth(agent_id: str, roster):
