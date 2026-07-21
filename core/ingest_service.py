@@ -275,6 +275,32 @@ def build_book(agent_id: str, npn: str = "", name: str = ""):
     from core import carrier_names
     if "carrier" in roster.columns:
         roster["carrier"] = roster["carrier"].apply(carrier_names.brand_of)
+    # AOR'd = gone. Clients on HealthSherpa's OWN at-risk list whose agent-of-record
+    # field now shows ANOTHER agent are marked Cancelled ("AOR taken") so they drop out
+    # of the active count — a stolen client isn't active. Blank-AOR (disconnected) ones
+    # on the list stay active (still yours, just needs a reconnect). They still surface
+    # on AOR at Risk, which keys off the at-risk list, not status. Done last so it wins.
+    _at = load_aor_at_risk_ids(agent_id)
+    if _at and "ffm_app_id" in roster.columns and "policy_aor" in roster.columns:
+        import re as _re
+        _ids = {_re.sub(r"[^0-9]", "", str(x)) for x in _at} - {""}
+        _rid = roster["ffm_app_id"].apply(lambda x: _re.sub(r"[^0-9]", "", str(x)))
+        _parts = [p for p in (name or "").lower().split() if p]
+
+        def _foreign_aor(a):
+            al = str(a or "").lower()
+            if npn and str(npn) in str(a):
+                return False
+            if not al.strip() or "none" in al:
+                return False
+            if _parts and all(p in al for p in _parts):
+                return False
+            return True
+
+        _taken = _rid.isin(_ids) & roster["policy_aor"].apply(_foreign_aor)
+        roster.loc[_taken, "status"] = "Cancelled"
+        if "cancel_reason" in roster.columns:
+            roster.loc[_taken, "cancel_reason"] = rules.REASON_TAKEN
     return roster
 
 
