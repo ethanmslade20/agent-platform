@@ -56,8 +56,11 @@ def _book_state(roster: pd.DataFrame, npn: str = "", name: str = "") -> dict:
             continue
         status = str(r.get("status") or "")
         reason = str(r.get("cancel_reason") or "")
+        # Still active in a carrier's member portal = still yours (the HealthSherpa AOR
+        # field just disconnected) — don't count those as taken.
+        confirmed = str(r.get("portal_confirmed", "")).strip().lower() in ("true", "1", "yes")
         foreign = can_judge_aor and _is_foreign_aor(r.get("policy_aor", ""), npn, name_parts)
-        if foreign or reason == REASON_TAKEN:
+        if (foreign and not confirmed) or reason == REASON_TAKEN:
             cat = "taken"
         elif status in ACTIVE:
             cat = "mine"

@@ -78,6 +78,11 @@ def aor_taken(roster: pd.DataFrame, npn: str = "", name: str = "") -> pd.DataFra
         return True
 
     mask = aor.apply(is_foreign)
+    # Still active in a carrier's member portal = still yours — the HealthSherpa AOR
+    # field just disconnected. Don't flag those as taken (they're a Reconnect, not a
+    # steal). Clients with NO portal record stay flagged for the agent to verify.
+    if "portal_confirmed" in roster.columns:
+        mask = mask & ~roster["portal_confirmed"].apply(_as_bool)
     out = roster[mask].copy()
     out["taken_by"] = aor[mask].str.replace(r"\s*\(NPN.*", "", regex=True).str.strip()
     return out

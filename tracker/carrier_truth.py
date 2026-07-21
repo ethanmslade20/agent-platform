@@ -135,6 +135,7 @@ def apply_ambetter_truth(all_clients: pd.DataFrame,
     for idx in ac.index[is_amb & is_active & is_ffm]:
         sid, nm = ac.at[idx, "_sid"], ac.at[idx, "_nm"]
         if (sid and sid in aa_sid) or nm in aa_nm:
+            ac.at[idx, "portal_confirmed"] = True
             continue  # confirmed active in portal
         eff = ac.at[idx, "_eff"]
         if (sid and sid in at_sid) or nm in at_nm:
@@ -260,6 +261,7 @@ def apply_oscar_truth(all_clients: pd.DataFrame,
     for idx in ac.index[is_osc & is_active & is_ffm]:
         nm, em, ph = ac.at[idx, "_nm"], ac.at[idx, "_em"], ac.at[idx, "_ph"]
         if _match(nm, em, ph, aa):
+            ac.at[idx, "portal_confirmed"] = True
             continue  # active in Oscar portal
         eff = ac.at[idx, "_eff"]
         if _match(nm, em, ph, ii):
@@ -367,6 +369,7 @@ def apply_uhc_truth(all_clients: pd.DataFrame,
     for idx in ac.index[is_uhc & is_active & is_ffm]:
         nm, ph = ac.at[idx, "_nm"], ac.at[idx, "_ph"]
         if _m(nm, ph, A):
+            ac.at[idx, "portal_confirmed"] = True
             continue  # active in UHC
         eff = ac.at[idx, "_eff"]
         if _m(nm, ph, I):
@@ -477,6 +480,7 @@ def apply_anthem_truth(all_clients: pd.DataFrame,
     for idx in ac.index[is_anth & is_active & is_ffm]:
         k = ac.at[idx, "_k"]
         if k in A:
+            ac.at[idx, "portal_confirmed"] = True
             continue
         eff = ac.at[idx, "_eff"]
         if k in I:

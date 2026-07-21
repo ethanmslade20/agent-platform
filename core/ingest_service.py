@@ -224,6 +224,11 @@ def build_book(agent_id: str, npn: str = "", name: str = ""):
     # (Ambetter/Oscar/UHC/Anthem) the agent uploaded — the carrier's own system is
     # the source of truth for who's really in force. No-op for any carrier not
     # uploaded. This is what brings the numbers in line with Ethan's site.
+    # portal_confirmed starts False and each carrier-truth pass flips it True for a
+    # client it positively matches as active in that portal — used by AOR-taken to
+    # spare "the HealthSherpa AOR field disconnected but the carrier still has them"
+    # cases (still active in the portal = still yours, not stolen).
+    roster["portal_confirmed"] = False
     roster = _apply_carrier_truth(agent_id, roster)
     # One client, one active policy — collapse plan switches (keep newest active,
     # term the older one) so a person never shows twice in the book.
