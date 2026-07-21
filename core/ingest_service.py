@@ -190,6 +190,42 @@ def save_carrier(agent_id: str, carrier: str, data: bytes) -> Path:
     return dest
 
 
+def ingest_aor_at_risk(agent_id: str, data: bytes) -> int:
+    """Store HealthSherpa's 'AOR at-risk clients' quick export — a bare list of Federal
+    Exchange IDs (= ffm_app_id) HealthSherpa itself flagged as agent-of-record at risk.
+    The export carries NO changed/disconnected label, so we keep the ID set and, on each
+    book build, sub-classify each by the current AOR field (another agent = likely taken;
+    blank = disconnected/reconnect; back to you = resolved)."""
+    import re as _re
+    import pandas as _pd
+    df = _pd.read_csv(io.BytesIO(data), dtype=str).fillna("")
+    idcol = next((c for c in df.columns
+                  if "exchange id" in c.lower() or c.strip().lower() == "ffm_app_id"), None)
+    if idcol is None:
+        raise ValueError("No 'Federal Exchange ID' column — is this the AOR at-risk export "
+                         "from HealthSherpa (Exports → Quick Exports → AOR at-risk clients)?")
+    ids = sorted({_re.sub(r"[^0-9]", "", str(x)) for x in df[idcol]} - {""})
+    paths.ensure_dirs(agent_id)
+    p = paths.tenant_root(agent_id) / "aor_at_risk.json"
+    p.write_text(json.dumps({"ids": ids,
+                             "uploaded": dt.datetime.now().isoformat(timespec="seconds")}, indent=2))
+    if store.using_db():
+        store.put_file(agent_id, "aor_at_risk.json", p.read_bytes())
+    _record_upload(agent_id, "aor_at_risk")
+    return len(ids)
+
+
+def load_aor_at_risk_ids(agent_id: str) -> set:
+    """The set of ffm_app_ids HealthSherpa flagged AOR-at-risk (empty if none uploaded)."""
+    p = paths.tenant_root(agent_id) / "aor_at_risk.json"
+    if store.using_db() and not p.exists():
+        store.hydrate(agent_id, paths.tenant_root(agent_id))
+    try:
+        return set(json.loads(p.read_text()).get("ids", []))
+    except Exception:
+        return set()
+
+
 def build_book(agent_id: str, npn: str = "", name: str = ""):
     """The agent's person-level roster from everything they've uploaded, with the
     same active-book rules Ethan's site applies (AOR-taken + verification-expired

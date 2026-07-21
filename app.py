@@ -390,6 +390,25 @@ def page_upload(tenant: dict) -> None:
             except (Exception, SystemExit) as e:
                 st.error(f"Couldn't read that file: {e}")
 
+    # ── AOR at-risk list (optional — makes the AOR at Risk page precise) ─────────
+    st.markdown(_up_section(
+        "AOR at-risk list", "optional", "OPTIONAL", "opt",
+        "HealthSherpa → Exports → Quick Exports → 'AOR at-risk clients' → Export. Lets AOR at Risk "
+        "use HealthSherpa's own list and tell real steals apart from reconnects."),
+        unsafe_allow_html=True)
+    with st.container(border=True, key="upcard_aorrisk"):
+        arf = st.file_uploader("AOR at-risk (.csv)", type=["csv"], key="aorrisk",
+                               label_visibility="collapsed")
+        _up_status(ups, "aor_at_risk")
+        if arf is not None and st.button("Save AOR at-risk list", type="primary", key="aorrisk_btn"):
+            try:
+                n = ingest_service.ingest_aor_at_risk(agent_id, arf.getvalue())
+                st.success(f"Saved — {n:,} at-risk clients. Your AOR at Risk page now uses "
+                           f"HealthSherpa's own list.")
+                st.rerun()
+            except Exception as e:
+                st.error(f"Couldn't read that file: {e}")
+
     # ── State marketplaces (optional) ────────────────────────────────────────────
     st.markdown(_up_section(
         "State marketplaces", "optional", "OPTIONAL", "opt",
@@ -2090,61 +2109,110 @@ def page_losses(tenant: dict, roster) -> None:
     ui.styled_table(show, height=min(120 + len(show) * 34, 620))
 
 
+def _aor_winback_table(t, agent_id, caption) -> None:
+    """Render the win-back table for AOR-taken clients, aged by HealthSherpa's real
+    last-sync date (falling back to when we first flagged them)."""
+    t = t.copy()
+    t["_mem"] = pd.to_numeric(t.get("applicant_count"), errors="coerce").fillna(1).clip(lower=1).astype(int)
+    _today = pd.Timestamp.today().normalize()
+    _sync = (pd.to_datetime(t["last_ede_sync"], errors="coerce")
+             if "last_ede_sync" in t.columns else pd.Series(pd.NaT, index=t.index))
+    t["_nk"] = ["".join(ch for ch in f"{f}{l}".lower() if ch.isalnum())
+                for f, l in zip(t.get("first_name", ""), t.get("last_name", ""))]
+    _seen = aor_track.days_gone(agent_id, list(t["_nk"]))  # keep fallback fresh + prune
+    _sync_days = (_today - _sync.dt.normalize()).dt.days
+    t["_days"] = (_sync_days.where(_sync.notna(), t["_nk"].map(_seen)).fillna(0).clip(lower=0).astype(int))
+    t = t.sort_values("_days", ascending=True)
+
+    def _rel(d):
+        d = int(d)
+        return "today" if d <= 0 else ("yesterday" if d == 1 else f"{d}d ago")
+    show = pd.DataFrame({
+        "Client": (t["first_name"].fillna("") + " " + t["last_name"].fillna("")).str.strip().str.title(),
+        "Taken By": t.get("taken_by", ""),
+        "Flagged": t["_days"].map(_rel),
+        "Carrier": t.get("carrier", ""),
+        "State": t.get("state", ""),
+        "Members": t["_mem"],
+        "Phone": t.get("phone", ""),
+    })
+    ui.styled_table(show, height=min(46 + 35 * max(len(show), 1), 560), bare=True)
+    st.caption(caption)
+
+
 def page_aor(tenant: dict, roster) -> None:
     st.title("AOR at Risk")
     st.caption("Clients another agent filed an Agent-of-Record change on — call them, most don't "
-               "know they were switched. Newest steals first — the freshest are the most winnable.")
+               "know they were switched. Newest first — the freshest are the most winnable.")
     st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
     if roster is None:
         _need_book(); return
+    npn, name, aid = tenant.get("npn", ""), tenant.get("name", ""), tenant["agent_id"]
+    at_ids = ingest_service.load_aor_at_risk_ids(aid)
 
-    taken = views.aor_taken(roster, tenant.get("npn", ""), tenant.get("name", "")).copy()
+    if at_ids:
+        # HealthSherpa's own at-risk list decides WHO is at risk; the agent-of-record
+        # field splits them: another agent = taken (win-back), blank = disconnected
+        # (reconnect/verify), back-to-you = resolved (auto-drops off). Each new upload
+        # re-resolves the list, so a reconnect that was really a steal moves to Win Back.
+        risk = views.aor_at_risk_view(roster, at_ids, npn, name)
+        taken = risk[risk["_sub"] == "taken"]
+        recon = risk[risk["_sub"] == "reconnect"]
+        resolved = int((risk["_sub"] == "reconnected").sum())
+        tmem = int(pd.to_numeric(taken.get("applicant_count"), errors="coerce").fillna(1).clip(lower=1).sum())
+        _cards([
+            ui.stat_card("Taken — Win Back", f"{len(taken):,}", "minus", ui.RED),
+            ui.stat_card("Members at Risk", f"{tmem:,}", "users", ui.ELEC),
+            ui.stat_card("Need Reconnect", f"{len(recon):,}", "shield", ui.GOLD),
+        ])
+        st.markdown("<br>", unsafe_allow_html=True)
+        if resolved:
+            st.caption(f"✅ {resolved} were on HealthSherpa's at-risk list but the AOR is back to "
+                       f"you — auto-cleared, no action needed.")
+        with st.container(border=True):
+            st.markdown(ui.chart_head("Taken by Another Agent — Win Back",
+                                      "Another agent shows as AOR. Call them — most don't know they were switched.",
+                                      "minus"), unsafe_allow_html=True)
+            if taken.empty:
+                st.success("None taken — no other agent shows on your at-risk clients. 🛡️")
+            else:
+                _aor_winback_table(taken, aid,
+                                   "**Flagged** = when the AOR last synced (HealthSherpa's date). Freshest on top.")
+        if not recon.empty:
+            st.markdown("<br>", unsafe_allow_html=True)
+            with st.container(border=True):
+                st.markdown(ui.chart_head("Reconnect — Verify",
+                                          "Marketplace link dropped, no other agent yet. Reconnect on HealthSherpa; "
+                                          "if it turns out to be a steal, they move to Win Back on your next upload.",
+                                          "shield"), unsafe_allow_html=True)
+                rshow = pd.DataFrame({
+                    "Client": (recon["first_name"].fillna("") + " " + recon["last_name"].fillna("")).str.strip().str.title(),
+                    "Carrier": recon.get("carrier", ""),
+                    "State": recon.get("state", ""),
+                    "Phone": recon.get("phone", ""),
+                })
+                ui.styled_table(rshow, height=min(46 + 35 * max(len(rshow), 1), 400), bare=True)
+        return
+
+    # ── No at-risk list uploaded → estimate from the AOR field alone, with a nudge ──
+    st.info("Upload your **HealthSherpa AOR at-risk export** (Exports → Quick Exports → *AOR at-risk "
+            "clients*) on the Upload page and this becomes precise — it uses HealthSherpa's own at-risk "
+            "list and tells real steals apart from reconnects. For now it's estimated from the agent-of-"
+            "record field alone.", icon="📄")
+    taken = views.aor_taken(roster, npn, name).copy()
     members = pd.to_numeric(taken.get("applicant_count"), errors="coerce").fillna(1).clip(lower=1)
-
     _cards([
         ui.stat_card("Taken by Another Agent", f"{len(taken):,}", "minus", ui.RED),
         ui.stat_card("Members at Risk", f"{int(members.sum()):,}", "users", ui.ELEC),
     ])
     st.markdown("<br>", unsafe_allow_html=True)
-
     with st.container(border=True):
         if taken.empty:
             st.success("None taken — you hold every client's AOR. 🛡️")
         else:
-            t = taken.copy()
-            t["_mem"] = members.values
-            # HealthSherpa's Last-Marketplace-sync date approximates WHEN the AOR
-            # change actually registered — use it as the real "days ago". We used to
-            # count from the day WE first noticed the steal, which stamped every client
-            # with today's date on a fresh upload (a wall of fake "New"s that made six
-            # months of gradual changes look like one bad day). Fall back to our own
-            # first-seen stamp only for the rare row with no sync date.
-            _today = pd.Timestamp.today().normalize()
-            _sync = (pd.to_datetime(t["last_ede_sync"], errors="coerce")
-                     if "last_ede_sync" in t.columns else pd.Series(pd.NaT, index=t.index))
-            t["_nk"] = ["".join(ch for ch in f"{f}{l}".lower() if ch.isalnum())
-                        for f, l in zip(t.get("first_name", ""), t.get("last_name", ""))]
-            _seen = aor_track.days_gone(tenant["agent_id"], list(t["_nk"]))  # keep fallback fresh + prune
-            _sync_days = (_today - _sync.dt.normalize()).dt.days
-            t["_days"] = (_sync_days.where(_sync.notna(), t["_nk"].map(_seen))
-                          .fillna(0).clip(lower=0).astype(int))
-            t = t.sort_values("_days", ascending=True)
-
-            def _rel(d):
-                d = int(d)
-                return "today" if d <= 0 else ("yesterday" if d == 1 else f"{d}d ago")
-            show = pd.DataFrame({
-                "Client": (t["first_name"].fillna("") + " " + t["last_name"].fillna("")).str.strip().str.title(),
-                "Taken By": t.get("taken_by", ""),
-                "Flagged": t["_days"].map(_rel),
-                "Carrier": t.get("carrier", ""),
-                "State": t.get("state", ""),
-                "Members": t["_mem"].astype(int),
-                "Phone": t.get("phone", ""),
-            })
-            ui.styled_table(show, height=min(46 + 35 * max(len(show), 1), 560), bare=True)
-            st.caption("**Flagged** = when the AOR change last registered on the Marketplace "
-                       "(HealthSherpa's own sync date). Freshest at the top — the most winnable.")
+            _aor_winback_table(taken, aid,
+                               "**Flagged** = when the AOR change last registered on the Marketplace "
+                               "(HealthSherpa's own sync date). Freshest at the top — the most winnable.")
 
 
 def page_verifications(tenant: dict, roster) -> None:

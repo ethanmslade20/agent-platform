@@ -88,6 +88,42 @@ def aor_taken(roster: pd.DataFrame, npn: str = "", name: str = "") -> pd.DataFra
     return out
 
 
+def aor_at_risk_view(roster: pd.DataFrame, at_risk_ids: set, npn: str = "", name: str = "") -> pd.DataFrame:
+    """The clients HealthSherpa itself flagged AOR-at-risk (matched by ffm_app_id), each
+    tagged with a sub-status read from the CURRENT agent-of-record field:
+      taken       — another agent shows  → win-back
+      reconnect   — AOR field is blank    → dropped Marketplace link, reconnect/verify
+      reconnected — back to the agent     → resolved (auto-drops off next upload)
+    HealthSherpa's at-risk export carries no changed/disconnected label, so the AOR field
+    is how we split them, and each new upload re-resolves the list automatically."""
+    empty = roster.iloc[0:0].copy()
+    empty["_sub"] = pd.Series(dtype=str)
+    empty["taken_by"] = pd.Series(dtype=str)
+    if not at_risk_ids or "ffm_app_id" not in roster.columns:
+        return empty
+    ids = {re.sub(r"[^0-9]", "", str(x)) for x in at_risk_ids} - {""}
+    rid = roster["ffm_app_id"].apply(lambda x: re.sub(r"[^0-9]", "", str(x)))
+    out = roster[rid.isin(ids)].copy()
+    if out.empty:
+        return empty
+    parts = [p for p in (name or "").lower().split() if p]
+
+    def _sub(a):
+        al = str(a or "").lower()
+        if npn and str(npn) in str(a):
+            return "reconnected"
+        if not al.strip() or "none" in al:
+            return "reconnect"
+        if parts and all(p in al for p in parts):
+            return "reconnected"
+        return "taken"
+
+    out["_sub"] = out["policy_aor"].apply(_sub)
+    out["taken_by"] = (out["policy_aor"].fillna("").astype(str)
+                       .str.replace(r"\s*\(NPN.*", "", regex=True).str.strip())
+    return out
+
+
 def verifications(roster: pd.DataFrame) -> pd.DataFrame:
     """Active clients with an expired DMI/SVI verification — coverage at risk
     unless docs go in."""
