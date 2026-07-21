@@ -587,19 +587,61 @@ def _bu_cx_names(e: dict) -> list:
     return list(e.get("lost", [])) + list(e.get("vexp", []))
 
 
+def _bu_group_by_day(hist: list) -> list:
+    """Collapse the per-upload log into ONE entry per calendar day. When a client's
+    status changes across a day's uploads, the LAST status wins (a client never shows
+    in two buckets). Display-only — the stored log is untouched. Days stay newest-first
+    (the order they appear in the newest-first log); uploads within a day are replayed
+    oldest-first so the final status is correct."""
+    from collections import OrderedDict
+    days = OrderedDict()
+    for e in hist:
+        day = str(e.get("date", "")).split("·")[0].strip() or str(e.get("date", ""))
+        days.setdefault(day, []).append(e)
+    out = []
+    for day, entries in days.items():
+        ups = [u for u in reversed(entries) if not u.get("first")]  # oldest-first, skip baselines
+        if not ups:
+            out.append({"date": day, "first": True})
+            continue
+        final, members = {}, 0
+        for u in ups:
+            for n in u.get("signed_names", []):
+                final[n] = "sg"
+            for n in _bu_cx_names(u):
+                final[n] = "cx"
+            for n in u.get("taken", []):
+                final[n] = "ar"
+            for n in u.get("won", []):
+                final[n] = "wb"
+            members += int(u.get("members", 0) or 0)
+        signed = [n for n, b in final.items() if b == "sg"]
+        out.append({
+            "date": day, "first": False, "n_uploads": len(ups),
+            "signed": len(signed), "members": members, "signed_names": signed,
+            "lost": [n for n, b in final.items() if b == "cx"], "vexp": [],
+            "taken": [n for n, b in final.items() if b == "ar"],
+            "won": [n for n, b in final.items() if b == "wb"],
+        })
+    return out
+
+
 def page_updates(tenant: dict, roster) -> None:
     st.title("Book Updates")
-    st.caption("Track changes each time you upload — the same rundown you'd get by text.")
+    st.caption("Track changes each day you upload — the same rundown you'd get by text.")
     st.markdown(_BU_CSS, unsafe_allow_html=True)
     hist = updates.history(tenant["agent_id"])
     if not hist:
         st.info("No updates yet — upload a HealthSherpa export and your summary shows up here.", icon="📥")
         return
+    hist = _bu_group_by_day(hist)  # one card per calendar day, not per upload
 
     cards = []
-    for e in hist:  # history is stored newest-first (log.insert(0, ...))
+    for e in hist:  # newest day first
+        _n = int(e.get("n_uploads", 1) or 1)
+        _multi = f' · {_n} uploads' if _n > 1 else ''
         hd = (f'<div class="bu-hd"><span class="bu-hd-t" style="display:inline-flex;align-items:center;gap:7px;">'
-              f'{ui.brand_icon_svg(15)}Book updated · {_bu_esc(e.get("date", ""))}</span></div>')
+              f'{ui.brand_icon_svg(15)}Book updated · {_bu_esc(e.get("date", ""))}{_multi}</span></div>')
         if e.get("first"):
             body = ('<div class="bu-baseline">' + _BU_INFO
                     + '<span>First upload — baseline set. Changes appear starting with your next upload.</span></div>')
