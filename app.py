@@ -2034,33 +2034,38 @@ def page_aor(tenant: dict, roster) -> None:
         else:
             t = taken.copy()
             t["_mem"] = members.values
-            # The HealthSherpa export doesn't say WHEN an AOR change happened, so we
-            # can't show a true "days gone". Instead we count from when the agent
-            # first flagged the steal (first upload = "New"). That's honest and makes
-            # the freshest-at-top order meaningful — stale, un-called steals rise.
+            # HealthSherpa's Last-Marketplace-sync date approximates WHEN the AOR
+            # change actually registered — use it as the real "days ago". We used to
+            # count from the day WE first noticed the steal, which stamped every client
+            # with today's date on a fresh upload (a wall of fake "New"s that made six
+            # months of gradual changes look like one bad day). Fall back to our own
+            # first-seen stamp only for the rare row with no sync date.
+            _today = pd.Timestamp.today().normalize()
+            _sync = (pd.to_datetime(t["last_ede_sync"], errors="coerce")
+                     if "last_ede_sync" in t.columns else pd.Series(pd.NaT, index=t.index))
             t["_nk"] = ["".join(ch for ch in f"{f}{l}".lower() if ch.isalnum())
                         for f, l in zip(t.get("first_name", ""), t.get("last_name", ""))]
-            _days = aor_track.days_gone(tenant["agent_id"], list(t["_nk"]))
-            t["_days"] = t["_nk"].map(_days).fillna(0).astype(int)
+            _seen = aor_track.days_gone(tenant["agent_id"], list(t["_nk"]))  # keep fallback fresh + prune
+            _sync_days = (_today - _sync.dt.normalize()).dt.days
+            t["_days"] = (_sync_days.where(_sync.notna(), t["_nk"].map(_seen))
+                          .fillna(0).clip(lower=0).astype(int))
             t = t.sort_values("_days", ascending=True)
-            if bool((t["_days"] == 0).all()):  # no aging yet — first upload / all fresh
-                st.info("First upload, so every steal below is marked **New** — the export doesn't "
-                        "include the date each AOR change happened. Keep uploading and we'll show how "
-                        "long each has been flagged, so stale un-called steals float to the top.",
-                        icon="🆕")
+
+            def _rel(d):
+                d = int(d)
+                return "today" if d <= 0 else ("yesterday" if d == 1 else f"{d}d ago")
             show = pd.DataFrame({
                 "Client": (t["first_name"].fillna("") + " " + t["last_name"].fillna("")).str.strip().str.title(),
                 "Taken By": t.get("taken_by", ""),
-                "Flagged": t["_days"].map(lambda d: "New" if d == 0 else f"{d}d ago"),
+                "Flagged": t["_days"].map(_rel),
                 "Carrier": t.get("carrier", ""),
                 "State": t.get("state", ""),
                 "Members": t["_mem"].astype(int),
                 "Phone": t.get("phone", ""),
             })
             ui.styled_table(show, height=min(46 + 35 * max(len(show), 1), 560), bare=True)
-            st.caption("**Flagged** = when you first saw the steal in your book — the export has no "
-                       "AOR-change date. Freshest at the top (most winnable); it fills in as you keep "
-                       "uploading.")
+            st.caption("**Flagged** = when the AOR change last registered on the Marketplace "
+                       "(HealthSherpa's own sync date). Freshest at the top — the most winnable.")
 
 
 def page_verifications(tenant: dict, roster) -> None:
