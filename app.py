@@ -382,7 +382,7 @@ def page_upload(tenant: dict) -> None:
                 else:
                     roster = ingest_service.build_book(agent_id, tenant.get("npn", ""), tenant.get("name", ""))
                     if roster is not None:
-                        updates.compute_and_log(agent_id, roster,
+                        updates.compute_and_log(agent_id, roster, when=_now_local_stamp(),
                                                 npn=tenant.get("npn", ""), name=tenant.get("name", ""))
                     st.success(f"Done — read {len(df):,} rows. Taking you to your **Book Updates**…")
                     st.session_state["_pending_nav"] = "Book Updates"
@@ -413,7 +413,7 @@ def page_upload(tenant: dict) -> None:
                             _snap, sdf = ingest_service.ingest_state_exchange(agent_id, sup.getvalue(), skey)
                             roster = ingest_service.build_book(agent_id, tenant.get("npn", ""), tenant.get("name", ""))
                             if roster is not None:
-                                updates.compute_and_log(agent_id, roster,
+                                updates.compute_and_log(agent_id, roster, when=_now_local_stamp(),
                                                         npn=tenant.get("npn", ""), name=tenant.get("name", ""))
                         st.success(f"Added — {len(sdf):,} enrolled clients merged. Your update summary "
                                    f"is on the **Book Updates** page.")
@@ -585,6 +585,29 @@ def _bu_cx_names(e: dict) -> list:
     # Genuine cancellations (+ verification-expired) → Re-Engage. AOR steals are
     # kept separate (e["taken"]) so they show in their own column.
     return list(e.get("lost", [])) + list(e.get("vexp", []))
+
+
+def _now_local_stamp() -> str:
+    """Timestamp in the VIEWER's local timezone. Streamlit Cloud runs in UTC, so a
+    plain datetime.now() there is 6-7h ahead of a Mountain-time agent — which also
+    shoved evening uploads onto the next calendar day (breaking the per-day grouping).
+    Use the browser's IANA zone, falling back to its UTC offset, then to UTC."""
+    import datetime as _dt
+    fmt = "%b %d, %Y · %-I:%M %p"
+    try:
+        tz = st.context.timezone
+        if tz:
+            from zoneinfo import ZoneInfo
+            return _dt.datetime.now(ZoneInfo(tz)).strftime(fmt)
+    except Exception:
+        pass
+    try:
+        off = st.context.timezone_offset  # minutes, JS getTimezoneOffset (positive = behind UTC)
+        if off is not None:
+            return (_dt.datetime.now(_dt.timezone.utc) - _dt.timedelta(minutes=int(off))).strftime(fmt)
+    except Exception:
+        pass
+    return _dt.datetime.now().strftime(fmt)
 
 
 def _bu_group_by_day(hist: list) -> list:
