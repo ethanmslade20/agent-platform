@@ -150,6 +150,16 @@ def apply_agent_settings(roster: pd.DataFrame, settings: dict) -> pd.DataFrame:
     elif states and "state" in df.columns:
         df = df[df["state"].astype(str).str.upper().isin(states)]
 
+    # Carriers the agent never counts as their book (e.g. Florida Blue / BCBS-FL).
+    # Matched on the RAW carrier name (before brand-collapse) as a case-insensitive
+    # substring, so "florida blue" drops the FL Blue entities without touching other
+    # Blue Cross plans.
+    excl_carriers = [str(x).strip().lower() for x in (settings.get("excluded_carriers") or [])
+                     if str(x).strip()]
+    if excl_carriers and "carrier" in df.columns:
+        cl = df["carrier"].astype(str).str.lower()
+        df = df[~cl.apply(lambda c: any(x in c for x in excl_carriers))]
+
     excl = settings.get("exclusions") or []
     if excl and {"first_name", "last_name"}.issubset(df.columns):
         keys = {(str(e.get("first", "")).lower().strip(),

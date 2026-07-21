@@ -1887,6 +1887,22 @@ def page_settings(tenant: dict, roster) -> None:
                     f'{"" if len(selected) == 1 else "s"} selected</span>'
                     f'<span style="color:var(--text2)">{names}</span></div>', unsafe_allow_html=True)
 
+    # ── Carriers you don't count (excluded from the whole book) ─────────────────
+    st.markdown("<br>", unsafe_allow_html=True)
+    st.markdown(_sec_head("minus", "Carriers you don't count",
+                          "Anyone on these carriers is left out of your book entirely — active count, "
+                          "Book of Business, everything (e.g. Florida Blue). Matched on the carrier "
+                          "name, one per line."), unsafe_allow_html=True)
+    _excl_now = "\n".join(cfg.get("excluded_carriers") or [])
+    _excl_new = st.text_area("Excluded carriers", value=_excl_now, key="excl_carriers",
+                             placeholder="Florida Blue", label_visibility="collapsed", height=90)
+    if st.button("Save excluded carriers", key="save_excl"):
+        lst = [ln.strip() for ln in _excl_new.splitlines() if ln.strip()]
+        settings.save(agent_id, {**settings.get(agent_id), "excluded_carriers": lst})
+        st.success(f"Saved — {len(lst)} excluded carrier{'' if len(lst) == 1 else 's'}. "
+                   f"They're left out of your book from your next build.")
+        st.rerun()
+
     # ── Save bar (profile) ──────────────────────────────────────────────────────
     sb1, sb2 = st.columns([3, 1])
     sb1.markdown('<div style="display:flex;align-items:center;gap:8px;color:#4ade80;font-weight:600;">'
