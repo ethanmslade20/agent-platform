@@ -18,7 +18,7 @@ import zipfile
 from pathlib import Path
 
 from tracker.config import load_carrier_configs
-from tracker.diff import build_all_clients
+from tracker.diff import build_all_clients, assign_loss_months
 from tracker.ingest import ingest_file, load_all_snapshots
 
 from core import paths, store
@@ -301,6 +301,13 @@ def build_book(agent_id: str, npn: str = "", name: str = ""):
         roster.loc[_taken, "status"] = "Cancelled"
         if "cancel_reason" in roster.columns:
             roster.loc[_taken, "cancel_reason"] = rules.REASON_TAKEN
+    # Loss dating: every gone client (AOR-taken, verification-expired, left-book,
+    # undated cancellation) that carries no cancel date gets one, anchored to the
+    # last month a snapshot showed them active. Without this they'd be counted
+    # active-forever in the month-over-month engine and never register as a loss,
+    # understating churn and overstating lifetime value. Runs last, after every
+    # status rule, so "who's gone" is final.
+    roster = assign_loss_months(roster)
     return roster
 
 
