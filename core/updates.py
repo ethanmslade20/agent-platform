@@ -107,14 +107,21 @@ def compute_and_log(agent_id: str, roster: pd.DataFrame, when: str | None = None
     else:
         def names(pred):
             return [v["name"] for k, v in new.items() if pred(k, v)]
-        signed = names(lambda k, v: v["cat"] == "mine" and k not in baseline)
+        # Per-name member counts for the newly-signed, so day-grouping can re-total
+        # members for only the clients whose FINAL status stays Signed (a client
+        # signed then moved to Taken the same day must drop out of BOTH count and
+        # members — otherwise you get the nonsensical "0 policies / 83 members").
+        _signed = {v["name"]: (1 if pd.isna(v["mem"]) else int(v["mem"]))
+                   for k, v in new.items() if v["cat"] == "mine" and k not in baseline}
+        signed = list(_signed.keys())
         won = names(lambda k, v: v["cat"] == "mine" and baseline.get(k, {}).get("cat") in ("lost", "taken"))
         lost = names(lambda k, v: v["cat"] == "lost" and baseline.get(k, {}).get("cat") == "mine")
         taken = names(lambda k, v: v["cat"] == "taken" and baseline.get(k, {}).get("cat") == "mine")
         vexp = names(lambda k, v: v["cat"] == "vexp" and baseline.get(k, {}).get("cat") == "mine")
-        members = sum(v["mem"] for k, v in new.items() if v["cat"] == "mine" and k not in baseline)
+        members = sum(_signed.values())
         entry = {"date": stamp, "first": False, "signed": len(signed), "members": members,
-                 "signed_names": signed, "lost": lost, "taken": taken, "vexp": vexp, "won": won}
+                 "signed_names": signed, "signed_mem": _signed,
+                 "lost": lost, "taken": taken, "vexp": vexp, "won": won}
 
     base_p.write_text(json.dumps(new))
     log = _read(log_p, [])

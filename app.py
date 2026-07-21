@@ -627,18 +627,32 @@ def _bu_group_by_day(hist: list) -> list:
         if not ups:
             out.append({"date": day, "first": True})
             continue
-        final, members = {}, 0
+        final, mem_by_name, agg_members, had_pm, union_signed = {}, {}, 0, False, set()
         for u in ups:
             for n in u.get("signed_names", []):
-                final[n] = "sg"
+                final[n] = "sg"; union_signed.add(n)
             for n in _bu_cx_names(u):
                 final[n] = "cx"
             for n in u.get("taken", []):
                 final[n] = "ar"
             for n in u.get("won", []):
                 final[n] = "wb"
-            members += int(u.get("members", 0) or 0)
+            sm = u.get("signed_mem")
+            if sm:
+                had_pm = True
+                mem_by_name.update(sm)
+            agg_members += int(u.get("members", 0) or 0)
         signed = [n for n, b in final.items() if b == "sg"]
+        # Members must follow the FINAL signed set. New entries carry per-name members;
+        # for legacy entries (no per-name data) the aggregate is right only if nobody
+        # who signed later churned out — otherwise fall back to one-per-client so we
+        # never show "0 policies / N members".
+        if had_pm:
+            members = sum(int(mem_by_name.get(n, 1)) for n in signed)
+        elif set(signed) == union_signed:
+            members = agg_members
+        else:
+            members = len(signed)
         out.append({
             "date": day, "first": False, "n_uploads": len(ups),
             "signed": len(signed), "members": members, "signed_names": signed,
