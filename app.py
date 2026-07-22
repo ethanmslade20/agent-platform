@@ -2075,14 +2075,24 @@ def page_book(tenant: dict, roster) -> None:
     active_sts = set(views.ACTIVE)
 
     # ── Filters ─────────────────────────────────────────────────────────────────
+    # Group Cancelled + Terminated into one "Cancelled / Terminated" option — both mean
+    # the client is gone (matches how the rest of the app counts them as lost).
+    _LOST_OPT = "Cancelled / Terminated"
+    _sts = set(df_all["status_display"].dropna().unique())
+    _status_opts = ["All"] + (["Effectuated"] if "Effectuated" in _sts else [])
+    if {"Cancelled", "Terminated"} & _sts:
+        _status_opts.append(_LOST_OPT)
+    _status_opts += sorted(s for s in _sts if s not in {"Effectuated", "Cancelled", "Terminated"})
     f1, f2, f3, f4 = st.columns([2, 2, 2, 3])
-    sel_status = f1.selectbox("Status", ["All"] + sorted(df_all["status_display"].dropna().unique().tolist()))
+    sel_status = f1.selectbox("Status", _status_opts)
     sel_carrier = f2.selectbox("Carrier", ["All"] + sorted(df_all["carrier"].dropna().unique().tolist()))
     sel_state = f3.selectbox("State", ["All"] + sorted(df_all["state"].dropna().astype(str).unique().tolist()))
     search = f4.text_input("Search by name", placeholder="First or last name…")
 
     df = df_all.copy()
-    if sel_status != "All":
+    if sel_status == _LOST_OPT:
+        df = df[df["status_display"].isin(["Cancelled", "Terminated"])]
+    elif sel_status != "All":
         df = df[df["status_display"] == sel_status]
     if sel_carrier != "All":
         df = df[df["carrier"] == sel_carrier]
