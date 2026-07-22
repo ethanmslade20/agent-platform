@@ -1975,8 +1975,15 @@ def page_settings(tenant: dict, roster) -> None:
                         st.caption("No carriers match your search.")
 
                 final = {b for b in shown if picks.get(b)} | (selected - set(shown))
-                if final != selected:
-                    settings.save(agent_id, {**cfg, "appointments": {**appts, edit: sorted(final)}})
+                # Carriers turned OFF here are recorded as explicit opt-outs so the build's
+                # auto-seed won't re-add them (that re-adding was why unchecks reverted).
+                optout = cfg.get("appt_optout") or {}
+                cur_oo = set(optout.get(edit, []))
+                new_oo = (cur_oo | {b for b in shown if not picks.get(b)}) - {b for b in shown if picks.get(b)}
+                if final != selected or new_oo != cur_oo:
+                    settings.save(agent_id, {**cfg,
+                        "appointments": {**appts, edit: sorted(final)},
+                        "appt_optout": {**optout, edit: sorted(new_oo)}})
                     st.rerun()
 
                 names = ", ".join(sorted(final)) if final else "none yet"

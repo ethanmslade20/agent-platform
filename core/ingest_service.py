@@ -325,6 +325,10 @@ def _auto_seed_appointments(agent_id: str, roster) -> None:
         return
     cfg = settings.get(agent_id)
     appts = {str(k).upper(): list(v or []) for k, v in (cfg.get("appointments") or {}).items()}
+    # Carriers the agent EXPLICITLY turned OFF in Settings. Auto-seed must never re-add
+    # these — even though clients on that carrier still exist in the book — otherwise an
+    # unchecked carrier "comes back on" the next time the book rebuilds. (Reported bug.)
+    optout = {str(k).upper(): set(v or []) for k, v in (cfg.get("appt_optout") or {}).items()}
     changed = False
     for st, sub in roster.groupby(roster["state"].astype(str).str.upper().str.strip()):
         st = str(st).strip()
@@ -334,8 +338,9 @@ def _auto_seed_appointments(agent_id: str, roster) -> None:
                   for c in sub["carrier"].dropna() if str(c).strip()}
         brands = {b for b in brands if b}
         have = set(appts.get(st, []))
-        if brands - have:
-            appts[st] = sorted(have | brands)
+        want = (have | brands) - optout.get(st, set())   # add new carriers, but honor opt-outs
+        if want != have:
+            appts[st] = sorted(want)
             changed = True
     if changed or not cfg.get("appointments_initialized"):
         settings.save(agent_id, {**cfg, "appointments": appts, "appointments_initialized": True})
