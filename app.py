@@ -1321,6 +1321,51 @@ def page_commissions(tenant: dict, roster) -> None:
                "what your active book projects to earn on top.")
     st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
 
+    # ── Hero: what your book pays you (recurring) + what you're owed ──────────────
+    # The two numbers that matter most on a commission page: (1) Monthly Recurring
+    # Commission — what your book actually paid you last full month, with its trend and
+    # annual run-rate (a book growing its recurring commission is winning); (2) money
+    # you're owed but aren't being paid — found money, with a dispute list below.
+    _recs0 = commissions_ingest.load_records(agent_id)
+    if not _recs0.empty:
+        _bm0 = commissions_ingest.summary(_recs0).get("by_month")
+        _mrc = _mrc_prev = _mrc_month = None
+        if _bm0 is not None and not _bm0.empty:
+            _b = _bm0.copy()
+            _b = _b[_b["Month"].astype(str).str.match(r"^\d{4}-\d{2}$")].sort_values("Month")
+            _curm = f"{dt.date.today().year}-{dt.date.today().month:02d}"
+            _comp = _b[_b["Month"].astype(str) < _curm]     # completed months only
+            if len(_comp) >= 1:
+                _mrc = float(_comp.iloc[-1]["Paid"]); _mrc_month = str(_comp.iloc[-1]["Month"])
+            if len(_comp) >= 2:
+                _mrc_prev = float(_comp.iloc[-2]["Paid"])
+        _owed = None
+        if roster is not None:
+            try:
+                _owed = float(commissions_ingest.reconcile(roster, _recs0).get("monthly_gap") or 0)
+            except Exception:
+                _owed = None
+        _hero = []
+        if _mrc is not None:
+            _ml = pd.to_datetime(str(_mrc_month) + "-01", errors="coerce")
+            _mname = _ml.strftime("%b %Y") if pd.notna(_ml) else str(_mrc_month)
+            if _mrc_prev is not None:
+                _d = _mrc - _mrc_prev
+                _msub = (f"{'▲' if _d >= 0 else '▼'} ${abs(_d):,.0f} vs prior mo  ·  "
+                         f"${_mrc * 12:,.0f}/yr run-rate")
+            else:
+                _msub = f"{_mname}  ·  ${_mrc * 12:,.0f}/yr run-rate"
+            _hero.append(ui.metric_card("Monthly Recurring Commission", f"${_mrc:,.0f}",
+                                        sub=_msub, icon_key="dollar", highlight="green"))
+        if _owed is not None and _owed > 0:
+            _hero.append(ui.metric_card("Commission You're Owed", f"${_owed:,.0f}/mo",
+                                        sub="active clients you're not paid on — see Gaps below",
+                                        icon_key="minus", highlight=True))
+        if _hero:
+            _hdr("Your Book Pays You", "dollar")
+            _cards(_hero)
+            st.markdown("<br>", unsafe_allow_html=True)
+
     # ── Money received (actual, from uploaded statements) ───────────────────────
     _hdr("Money Received", "dollar")
     _commission_upload(agent_id)
