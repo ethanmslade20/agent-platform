@@ -1961,30 +1961,28 @@ def page_settings(tenant: dict, roster) -> None:
                 shown = [c for c in opts if q in c.lower()] if q else opts
                 selected = set(appts.get(edit, []))
 
-                def _toggle(state, brand, key):
-                    cfg2 = settings.get(agent_id)
-                    cur = set(cfg2.get("appointments", {}).get(state, []))
-                    cur.add(brand) if st.session_state.get(key) else cur.discard(brand)
-                    settings.save(agent_id, {**cfg2, "appointments": {
-                        **cfg2.get("appointments", {}), state: sorted(cur)}})
-
+                # Read each checkbox's value DIRECTLY — the return value is the source of
+                # truth. No on_change/session_state juggling (that read a stale value and
+                # re-saved carriers back ON). Save only when the on-screen picks differ from
+                # what's stored; carriers hidden by the search box keep their saved state.
                 with st.container(key="carriergrid"):
                     grid = st.columns(3)
+                    picks = {}
                     for i, brand in enumerate(shown):
-                        key = f"cb_{edit}_{brand}"
-                        # Seed the checkbox from the saved value ONCE, then let the widget own
-                        # its state. Re-assigning every run (the old behavior) overwrote the
-                        # user's click on the post-click rerun, so toggles appeared to revert.
-                        if key not in st.session_state:
-                            st.session_state[key] = brand in selected
-                        grid[i % 3].checkbox(brand, key=key, on_change=_toggle, args=(edit, brand, key))
+                        picks[brand] = grid[i % 3].checkbox(
+                            brand, value=(brand in selected), key=f"cb_{edit}_{brand}")
                     if not shown:
                         st.caption("No carriers match your search.")
 
-                names = ", ".join(sorted(selected)) if selected else "none yet"
+                final = {b for b in shown if picks.get(b)} | (selected - set(shown))
+                if final != selected:
+                    settings.save(agent_id, {**cfg, "appointments": {**appts, edit: sorted(final)}})
+                    st.rerun()
+
+                names = ", ".join(sorted(final)) if final else "none yet"
                 st.markdown(
-                    f'<div class="set-footer"><span>✓ <b>{len(selected)}</b> carrier'
-                    f'{"" if len(selected) == 1 else "s"} selected</span>'
+                    f'<div class="set-footer"><span>✓ <b>{len(final)}</b> carrier'
+                    f'{"" if len(final) == 1 else "s"} selected</span>'
                     f'<span style="color:var(--text2)">{names}</span></div>', unsafe_allow_html=True)
 
     # ── Carriers you don't count (excluded from the whole book) ─────────────────
