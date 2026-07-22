@@ -1031,6 +1031,40 @@ def page_client_lookup(tenant: dict, roster) -> None:
     _mem_n = pd.to_numeric(r.get("applicant_count"), errors="coerce")
     _mem = 1 if pd.isna(_mem_n) else max(int(_mem_n), 1)
 
+    # ── Commission actually paid on this client (from uploaded statements) ───────
+    # Match the client's commission records by any of their policy IDs (name-independent)
+    # or by name, then total it + break it out by month.
+    def _ck(m):
+        x = _re.sub(r"\b(family|household)\b", "", str(m), flags=_re.I).strip()
+        if "," in x:
+            last, rest = x.split(",", 1); p = rest.split()
+            return _re.sub(r"[^a-z]", "", ((p[0] if p else "") + last).lower())
+        p = x.split()
+        return _re.sub(r"[^a-z]", "", ((p[0] + p[-1]) if len(p) >= 2 else x).lower())
+    _paid_total, _paid_by_month = None, None
+    try:
+        _recs = commissions_ingest.load_records(tenant["agent_id"])
+    except Exception:
+        _recs = None
+    if _recs is not None and not _recs.empty and "amount" in _recs.columns:
+        _polset = {_re.sub(r"[^0-9a-z]", "", str(p).lower()) for p in rows.get("policy_number", [])}
+        _polset = {p for p in _polset if len(p) >= 5}
+        _cnk = _re.sub(r"[^a-z]", "", (str(r.get("first_name", "")) + str(r.get("last_name", ""))).lower())
+        _rc = _recs.copy()
+        _rc["_p"] = (_rc["policy_id"].apply(lambda x: _re.sub(r"[^0-9a-z]", "", str(x).lower()))
+                     if "policy_id" in _rc.columns else "")
+        _rc["_n"] = _rc["client"].apply(_ck) if "client" in _rc.columns else ""
+        _mine = _rc[((_rc["_p"] != "") & _rc["_p"].isin(_polset)) | (_rc["_n"] == _cnk)]
+        if not _mine.empty:
+            _amt = pd.to_numeric(_mine["amount"], errors="coerce").fillna(0.0)
+            _paid_total = float(_amt.sum())
+            if "period" in _mine.columns:
+                _bm = _mine.assign(_a=_amt)
+                _bm = _bm[_bm["period"].astype(str).str.match(r"^\d{4}-\d{2}$")]
+                if not _bm.empty:
+                    _paid_by_month = _bm.groupby("period")["_a"].sum().reset_index()
+                    _paid_by_month.columns = ["Month", "Paid"]
+
     # ── Header ────────────────────────────────────────────────────────────────
     pill_bg, pill_tx = (("rgba(34,197,94,.15)", "#4ade80") if is_active
                         else ("rgba(239,68,68,.15)", "#f87171"))
@@ -1067,6 +1101,8 @@ def page_client_lookup(tenant: dict, roster) -> None:
         ui.stat_card("Net Premium / Mo", f"${prem:,.0f}" if pd.notna(prem) else "—", "dollar", ui.GREEN),
         ui.stat_card("Months on Book",
                      ("<1" if int(mob) == 0 else f"{int(mob)}") if pd.notna(mob) else "—", "calendar", ui.ELEC),
+        ui.stat_card("Paid to Date", f"${_paid_total:,.0f}" if _paid_total is not None else "—",
+                     "dollar", "#c4b5fd"),
     ])
 
     # ── Contact ─────────────────────────────────────────────────────────────────
@@ -1111,6 +1147,20 @@ def page_client_lookup(tenant: dict, roster) -> None:
             pt["Premium"] = pd.to_numeric(pt["Premium"], errors="coerce").map(
                 lambda v: f"${v:,.2f}" if pd.notna(v) else "—")
         ui.styled_table(pt, bare=True)
+
+    # ── Commission paid (from uploaded statements) ──────────────────────────────
+    if _paid_by_month is not None and not _paid_by_month.empty:
+        with st.container(border=True):
+            st.markdown(ui.chart_head("Commission Paid",
+                                      f"${_paid_total:,.2f} received on {person} to date", "dollar"),
+                        unsafe_allow_html=True)
+            _pbm = _paid_by_month.sort_values("Month").copy()
+            _pbm["Month"] = pd.to_datetime(_pbm["Month"] + "-01", errors="coerce").dt.strftime("%b %Y")
+            _pbm["Paid"] = _pbm["Paid"].map(lambda v: f"${v:,.2f}")
+            ui.styled_table(_pbm, bare=True)
+    elif _recs is not None and not _recs.empty:
+        st.caption("No commission recorded for this client yet — it'll appear here once a statement "
+                   "with their policy or name is uploaded on the Commissions page.")
 
 
 def _render_removable_statement(agent_id: str, sf: str, meta: str, ctx: str = "list") -> None:
