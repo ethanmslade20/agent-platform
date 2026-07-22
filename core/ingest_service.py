@@ -312,24 +312,22 @@ def build_book(agent_id: str, npn: str = "", name: str = ""):
 
 
 def _auto_seed_appointments(agent_id: str, roster) -> None:
-    """Keep the agent's appointments in sync with the carriers/states ACTUALLY in
-    their book, so the appointment filter never silently drops a client on a carrier
-    or state that first appeared AFTER the initial upload (which is how ~53 of Ethan's
-    active clients — Florida Blue, Alliant, CareSource, even some Ambetter/BCBS/UHC —
-    were vanishing). Runs every build and UNIONs any new (state, carrier) found into
-    the existing appointments — it only ever GROWS the turned-on set to match the real
-    book, never removes. Carriers with no known brand fall back to their raw name so
-    they still match. Client-level hiding stays available via exclusions."""
+    """Seed appointments ONCE, on the agent's very first upload: turn on every (state,
+    carrier) found in their book so they don't have to click each one by hand. After
+    that this NEVER touches appointments again — the agent owns them (turn off what they
+    don't want and it stays off; add a carrier by hand if a new one shows up later).
+
+    Gated on `appointments_initialized`, so later uploads don't re-add carriers the
+    agent deliberately turned off (that re-adding was why unchecks 'came back on').
+    Trade-off the agent chose: a carrier that first appears in a LATER upload won't
+    auto-turn-on, so its clients are filtered out until the agent adds it in Settings."""
     from core import settings, carrier_names
     if roster is None or roster.empty or not {"state", "carrier"}.issubset(roster.columns):
         return
     cfg = settings.get(agent_id)
+    if cfg.get("appointments_initialized"):
+        return  # already seeded once — never auto-change appointments again
     appts = {str(k).upper(): list(v or []) for k, v in (cfg.get("appointments") or {}).items()}
-    # Carriers the agent EXPLICITLY turned OFF in Settings. Auto-seed must never re-add
-    # these — even though clients on that carrier still exist in the book — otherwise an
-    # unchecked carrier "comes back on" the next time the book rebuilds. (Reported bug.)
-    optout = {str(k).upper(): set(v or []) for k, v in (cfg.get("appt_optout") or {}).items()}
-    changed = False
     for st, sub in roster.groupby(roster["state"].astype(str).str.upper().str.strip()):
         st = str(st).strip()
         if not st or st == "NAN":
@@ -337,13 +335,9 @@ def _auto_seed_appointments(agent_id: str, roster) -> None:
         brands = {(carrier_names.brand_of(c) or str(c).strip())
                   for c in sub["carrier"].dropna() if str(c).strip()}
         brands = {b for b in brands if b}
-        have = set(appts.get(st, []))
-        want = (have | brands) - optout.get(st, set())   # add new carriers, but honor opt-outs
-        if want != have:
-            appts[st] = sorted(want)
-            changed = True
-    if changed or not cfg.get("appointments_initialized"):
-        settings.save(agent_id, {**cfg, "appointments": appts, "appointments_initialized": True})
+        if brands:
+            appts[st] = sorted(set(appts.get(st, [])) | brands)
+    settings.save(agent_id, {**cfg, "appointments": appts, "appointments_initialized": True})
 
 
 def _apply_carrier_truth(agent_id: str, roster):
