@@ -1818,17 +1818,17 @@ _SETTINGS_CSS = """<style>
      background:var(--input-bg);font-weight:600;position:relative;white-space:pre-line;line-height:1.35;}
   .st-key-statelist [data-testid="stButton"] button::after{content:"›";position:absolute;right:14px;top:50%;
      transform:translateY(-50%);color:#64748b;font-size:1.25rem;}
-  /* SELECTED state = a "primary" button. Streamlit paints its text white, but our card
-     background above is light → white-on-light = an invisible/blank card. Force dark
-     text and show selection with a blue highlight instead. (Covers both the older
-     kind="primary" and newer stBaseButton-primary markup.) */
+  /* Dark text on EVERY state card, using the SAME selector that already styles them
+     (so it's guaranteed to match). The selected card renders as a Streamlit "primary"
+     button whose white text — set via -webkit-text-fill-color, which overrides plain
+     `color` — would otherwise vanish on our light card. Force BOTH properties. */
+  .st-key-statelist [data-testid="stButton"] button,
+  .st-key-statelist [data-testid="stButton"] button *{
+     color:#1e293b!important;-webkit-text-fill-color:#1e293b!important;}
+  /* selected state → blue highlight (background only; text stays dark from the rule above) */
   .st-key-statelist [data-testid="stButton"] button[kind="primary"],
   .st-key-statelist button[data-testid="stBaseButton-primary"]{
      background:rgba(59,130,246,.16)!important;border-color:#3b82f6!important;}
-  .st-key-statelist [data-testid="stButton"] button[kind="primary"],
-  .st-key-statelist [data-testid="stButton"] button[kind="primary"] *,
-  .st-key-statelist button[data-testid="stBaseButton-primary"],
-  .st-key-statelist button[data-testid="stBaseButton-primary"] *{color:#1e293b!important;}
   /* carrier checkbox grid → selectable cards */
   .st-key-carriergrid [data-testid="stCheckbox"]{border:1px solid rgba(96,165,250,.18);border-radius:10px;
      padding:11px 13px;background:var(--input-bg);transition:border-color .12s,background .12s;}
