@@ -1099,6 +1099,55 @@ def page_client_lookup(tenant: dict, roster) -> None:
         ui.styled_table(pt, bare=True)
 
 
+def _render_removable_statement(agent_id: str, sf: str, meta: str, ctx: str = "list") -> None:
+    """One uploaded-statement row with a confirm-gated Remove button. `ctx`
+    namespaces the widget keys so the same file can appear in more than one place
+    (the manage list AND a chart drill-down) without duplicate-key clashes."""
+    ck = f"confirm_rm::{ctx}::{sf}"
+    if st.session_state.get(ck):
+        st.warning(f"Remove **{sf}** — {meta}? You'd just re-upload to restore it.")
+        a, b, _sp = st.columns([1, 1, 4])
+        if a.button("Yes, remove", key=f"yesrm::{ctx}::{sf}", type="primary"):
+            left = commissions_ingest.remove_file(agent_id, sf)
+            st.session_state.pop(ck, None)
+            st.success(f"Removed {sf}. {left:,} commission records left.")
+            st.rerun()
+        if b.button("Cancel", key=f"norm::{ctx}::{sf}"):
+            st.session_state.pop(ck, None); st.rerun()
+    else:
+        c1, c2 = st.columns([5, 1])
+        c1.markdown(f"**{sf}**  ·  {meta}")
+        if c2.button("Remove", key=f"rm::{ctx}::{sf}"):
+            st.session_state[ck] = True; st.rerun()
+
+
+def _month_statement_drilldown(agent_id: str, period: str) -> None:
+    """Show the statement(s) filed under one month (clicked on the Paid-by-Month
+    chart), each with a Remove button — so you can pull a wrong-month upload right
+    from the bar you clicked."""
+    label = period
+    try:
+        label = pd.to_datetime(f"{period}-01").strftime("%B %Y")
+    except Exception:
+        pass
+    recs = commissions_ingest.load_records(agent_id)
+    if recs.empty or "period" not in recs.columns:
+        return
+    m = recs[recs["period"].astype(str) == str(period)]
+    if m.empty:
+        st.caption(f"No statements filed under {label}.")
+        return
+    amt = pd.to_numeric(m["amount"], errors="coerce").fillna(0.0)
+    g = (m.assign(_a=amt).groupby("source_file")
+         .agg(lines=("_a", "size"), total=("_a", "sum")).reset_index()
+         .sort_values("source_file"))
+    st.markdown(f"**📅 Statements filed under {label}** — click Remove to pull one, then re-upload it correctly:")
+    for _, r in g.iterrows():
+        _render_removable_statement(
+            agent_id, str(r["source_file"]),
+            f"{int(r['lines'])} lines  ·  ${r['total']:,.2f}", ctx="chart")
+
+
 def _commission_upload(agent_id: str) -> None:
     """Upload any commission statement → auto-map columns (saved per format) → canonical records."""
     recs = commissions_ingest.load_records(agent_id)
@@ -1195,24 +1244,10 @@ def _commission_upload(agent_id: str) -> None:
                        "here, then re-upload the correct one. This only deletes that one "
                        "statement's rows — nothing else is touched.")
             for _, r in files.iterrows():
-                sf = str(r["source_file"]); mo = r["months"] or "—"
-                ckey = f"confirm_rm::{sf}"
-                if st.session_state.get(ckey):
-                    st.warning(f"Remove **{sf}** — {mo}, {int(r['lines'])} lines, "
-                               f"${r['total']:,.2f}? You'd just re-upload to restore it.")
-                    a, b, _sp = st.columns([1, 1, 4])
-                    if a.button("Yes, remove", key=f"yesrm::{sf}", type="primary"):
-                        left = commissions_ingest.remove_file(agent_id, sf)
-                        st.session_state.pop(ckey, None)
-                        st.success(f"Removed {sf}. {left:,} commission records left.")
-                        st.rerun()
-                    if b.button("Cancel", key=f"norm::{sf}"):
-                        st.session_state.pop(ckey, None); st.rerun()
-                else:
-                    c1, c2 = st.columns([5, 1])
-                    c1.markdown(f"**{sf}**  ·  {mo}  ·  {int(r['lines'])} lines  ·  ${r['total']:,.2f}")
-                    if c2.button("Remove", key=f"rm::{sf}"):
-                        st.session_state[ckey] = True; st.rerun()
+                mo = r["months"] or "—"
+                _render_removable_statement(
+                    agent_id, str(r["source_file"]),
+                    f"{mo}  ·  {int(r['lines'])} lines  ·  ${r['total']:,.2f}", ctx="list")
 
 
 def page_commissions(tenant: dict, roster) -> None:
@@ -1239,6 +1274,7 @@ def page_commissions(tenant: dict, roster) -> None:
             ui.metric_card("Carriers Paying", f"{s['by_carrier'].shape[0]}", sub="distinct carriers", icon_key="pie"),
         ])
         st.markdown("<br>", unsafe_allow_html=True)
+        picked_month = None
         c1, c2 = st.columns(2)
         with c1:
             with st.container(border=True):
@@ -1249,13 +1285,31 @@ def page_commissions(tenant: dict, roster) -> None:
                 ui.styled_table(bc, height=min(46 + 35 * (len(bc) + 1), 420), bare=True)
         with c2:
             with st.container(border=True):
-                st.markdown(ui.chart_head("Paid by Month", "Commission received over time", "trend"),
+                st.markdown(ui.chart_head("Paid by Month", "Click a bar to manage that month's statements", "trend"),
                             unsafe_allow_html=True)
                 bm = s["by_month"]
                 if bm.empty:
                     st.caption("Map a payment-date column to see the monthly trend.")
                 else:
-                    ui.show_chart(charts.paid_by_month_fig(bm))
+                    ev = ui.show_chart_select(charts.paid_by_month_fig(bm), key="paid_by_month_sel")
+                    # Map the clicked bar's label ("Apr 2026") back to its 'YYYY-MM' period.
+                    try:
+                        pts = ev["selection"]["points"]
+                    except Exception:
+                        pts = []
+                    if pts:
+                        lbl = str(pts[0].get("x", ""))
+                        for _m in bm["Month"].astype(str):
+                            try:
+                                if pd.to_datetime(f"{_m}-01").strftime("%b %Y") == lbl:
+                                    picked_month = _m; break
+                            except Exception:
+                                pass
+                    if not picked_month:
+                        st.caption("Tip: click a bar to see and remove the statements filed under that month.")
+        if picked_month:
+            with st.container(border=True):
+                _month_statement_drilldown(agent_id, picked_month)
         st.caption("Money Received comes straight from your uploaded statements. "
                    "Re-uploading the same file replaces its rows (no double-counting).")
 

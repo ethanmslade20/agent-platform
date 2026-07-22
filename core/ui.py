@@ -922,6 +922,21 @@ def show_chart(fig):
     )
 
 
+def show_chart_select(fig, key):
+    """Like show_chart, but the marks are CLICKABLE: returns Streamlit's selection
+    event so the caller can react to a clicked bar/point (e.g. drill into a month).
+    Read the clicked category with ev["selection"]["points"][0]["x"]."""
+    theme_fig(fig)
+    fig.update_layout(clickmode="event+select")
+    return st.plotly_chart(
+        fig,
+        use_container_width=True,
+        key=key,
+        on_select="rerun",
+        config={"displayModeBar": False, "scrollZoom": False, "doubleClick": False},
+    )
+
+
 
 def _chart_layout(**extra) -> dict:
     base = dict(
