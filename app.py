@@ -1912,6 +1912,27 @@ def page_settings(tenant: dict, roster) -> None:
             cc2.markdown(_chip("shield", sum(len(v) for v in appts.values()), "Carrier Appointments"),
                          unsafe_allow_html=True)
 
+        # New-carrier heads-up: carriers that appeared in the book since setup and haven't
+        # been turned on OR dismissed. Their clients are filtered out until handled here —
+        # this is the safety net for "seed once, never auto-add later".
+        new_c = ingest_service.new_carriers(agent_id, roster)
+        if new_c:
+            n = sum(len(v) for v in new_c.values())
+            st.warning(f"🆕 {n} new carrier{'s' if n != 1 else ''} showed up in your book since setup — "
+                       "not counted yet, so their clients are filtered out until you decide. "
+                       "Turn on the ones you write; dismiss the rest.")
+            for stt in sorted(new_c):
+                for b in sorted(new_c[stt]):
+                    nc1, nc2, nc3 = st.columns([4, 1, 1])
+                    nc1.markdown(f"**{b}** · {_STATE_NAMES.get(stt, stt)}")
+                    if nc2.button("Turn on", key=f"newon_{stt}_{b}", type="primary"):
+                        ingest_service.acknowledge_carrier(agent_id, stt, b, True)
+                        st.rerun()
+                    if nc3.button("Dismiss", key=f"newoff_{stt}_{b}"):
+                        ingest_service.acknowledge_carrier(agent_id, stt, b, False)
+                        st.rerun()
+            st.divider()
+
         edit = st.session_state.get("appt_edit")
         if edit not in appts:
             edit = (sorted(appts, key=lambda s: _STATE_NAMES.get(s, s))[0] if appts else None)

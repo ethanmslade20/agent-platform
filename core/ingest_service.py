@@ -311,23 +311,10 @@ def build_book(agent_id: str, npn: str = "", name: str = ""):
     return roster
 
 
-def _auto_seed_appointments(agent_id: str, roster) -> None:
-    """Seed appointments ONCE, on the agent's very first upload: turn on every (state,
-    carrier) found in their book so they don't have to click each one by hand. After
-    that this NEVER touches appointments again — the agent owns them (turn off what they
-    don't want and it stays off; add a carrier by hand if a new one shows up later).
-
-    Gated on `appointments_initialized`, so later uploads don't re-add carriers the
-    agent deliberately turned off (that re-adding was why unchecks 'came back on').
-    Trade-off the agent chose: a carrier that first appears in a LATER upload won't
-    auto-turn-on, so its clients are filtered out until the agent adds it in Settings."""
-    from core import settings, carrier_names
-    if roster is None or roster.empty or not {"state", "carrier"}.issubset(roster.columns):
-        return
-    cfg = settings.get(agent_id)
-    if cfg.get("appointments_initialized"):
-        return  # already seeded once — never auto-change appointments again
-    appts = {str(k).upper(): list(v or []) for k, v in (cfg.get("appointments") or {}).items()}
+def _book_brands(roster) -> dict:
+    """{STATE: {brand,...}} actually present in the roster right now."""
+    from core import carrier_names
+    book = {}
     for st, sub in roster.groupby(roster["state"].astype(str).str.upper().str.strip()):
         st = str(st).strip()
         if not st or st == "NAN":
@@ -336,8 +323,70 @@ def _auto_seed_appointments(agent_id: str, roster) -> None:
                   for c in sub["carrier"].dropna() if str(c).strip()}
         brands = {b for b in brands if b}
         if brands:
+            book[st] = brands
+    return book
+
+
+def _auto_seed_appointments(agent_id: str, roster) -> None:
+    """Seed appointments ONCE, on the agent's very first upload: turn on every (state,
+    carrier) found in their book so they don't have to click each one by hand. After
+    that this NEVER touches appointments again — the agent owns them (turn off what they
+    don't want and it stays off).
+
+    Also maintains `appt_seen` — every carrier the agent has acknowledged (turned on or
+    dismissed). Carriers in the book but NOT in appt_seen are "new" and drive the
+    Settings heads-up (new_carriers), so a carrier that first appears in a later upload
+    is surfaced instead of silently dropping its clients."""
+    from core import settings
+    if roster is None or roster.empty or not {"state", "carrier"}.issubset(roster.columns):
+        return
+    cfg = settings.get(agent_id)
+    book = _book_brands(roster)
+    if not cfg.get("appointments_initialized"):
+        # first upload: turn every carrier on AND record them all as acknowledged
+        appts = {str(k).upper(): list(v or []) for k, v in (cfg.get("appointments") or {}).items()}
+        for st, brands in book.items():
             appts[st] = sorted(set(appts.get(st, [])) | brands)
-    settings.save(agent_id, {**cfg, "appointments": appts, "appointments_initialized": True})
+        settings.save(agent_id, {**cfg, "appointments": appts,
+                                 "appt_seen": {st: sorted(b) for st, b in book.items()},
+                                 "appointments_initialized": True})
+        return
+    # Already initialized — never auto-change appointments. But if this agent predates
+    # carrier tracking, acknowledge their whole CURRENT book once, so the heads-up only
+    # ever flags carriers that appear from here on (not everything they already have).
+    if "appt_seen" not in cfg:
+        settings.save(agent_id, {**cfg, "appt_seen": {st: sorted(b) for st, b in book.items()}})
+
+
+def new_carriers(agent_id: str, roster) -> dict:
+    """{STATE: [brand,...]} present in the book but never acknowledged (turned on OR
+    dismissed) — i.e. showed up after the first-upload seed. Drives the Settings heads-up."""
+    from core import settings
+    if roster is None or roster.empty or not {"state", "carrier"}.issubset(roster.columns):
+        return {}
+    seen = {str(k).upper(): set(v or []) for k, v in (settings.get(agent_id).get("appt_seen") or {}).items()}
+    out = {}
+    for st, brands in _book_brands(roster).items():
+        fresh = sorted(brands - seen.get(st, set()))
+        if fresh:
+            out[st] = fresh
+    return out
+
+
+def acknowledge_carrier(agent_id: str, state: str, brand: str, turn_on: bool) -> None:
+    """Handle a newly-seen carrier: always add it to appt_seen (so it stops showing as
+    new); if turn_on, also add it to appointments so its clients count from now on."""
+    from core import settings
+    cfg = settings.get(agent_id)
+    stt = str(state).upper().strip()
+    seen = {str(k).upper(): set(v or []) for k, v in (cfg.get("appt_seen") or {}).items()}
+    seen.setdefault(stt, set()).add(brand)
+    appts = {str(k).upper(): list(v or []) for k, v in (cfg.get("appointments") or {}).items()}
+    if turn_on:
+        appts[stt] = sorted(set(appts.get(stt, [])) | {brand})
+    settings.save(agent_id, {**cfg,
+                             "appt_seen": {k: sorted(v) for k, v in seen.items()},
+                             "appointments": appts})
 
 
 def _apply_carrier_truth(agent_id: str, roster):
