@@ -1183,6 +1183,37 @@ def _commission_upload(agent_id: str) -> None:
             except Exception as e:
                 st.error(str(e))
 
+    # ── Manage / remove uploaded statements ─────────────────────────────────────
+    # Commission statements accumulate (one per month), so a wrong file or a
+    # wrong-month upload can't be fixed by re-uploading — it just adds alongside.
+    # This lets the agent pull a single statement and re-do it. Only that file's
+    # rows are deleted; everything else is untouched.
+    files = commissions_ingest.uploaded_files(agent_id)
+    if not files.empty:
+        with st.expander(f"🗂  Manage / remove uploaded statements ({len(files)})"):
+            st.caption("Uploaded the wrong file, or filed one under the wrong month? Remove it "
+                       "here, then re-upload the correct one. This only deletes that one "
+                       "statement's rows — nothing else is touched.")
+            for _, r in files.iterrows():
+                sf = str(r["source_file"]); mo = r["months"] or "—"
+                ckey = f"confirm_rm::{sf}"
+                if st.session_state.get(ckey):
+                    st.warning(f"Remove **{sf}** — {mo}, {int(r['lines'])} lines, "
+                               f"${r['total']:,.2f}? You'd just re-upload to restore it.")
+                    a, b, _sp = st.columns([1, 1, 4])
+                    if a.button("Yes, remove", key=f"yesrm::{sf}", type="primary"):
+                        left = commissions_ingest.remove_file(agent_id, sf)
+                        st.session_state.pop(ckey, None)
+                        st.success(f"Removed {sf}. {left:,} commission records left.")
+                        st.rerun()
+                    if b.button("Cancel", key=f"norm::{sf}"):
+                        st.session_state.pop(ckey, None); st.rerun()
+                else:
+                    c1, c2 = st.columns([5, 1])
+                    c1.markdown(f"**{sf}**  ·  {mo}  ·  {int(r['lines'])} lines  ·  ${r['total']:,.2f}")
+                    if c2.button("Remove", key=f"rm::{sf}"):
+                        st.session_state[ckey] = True; st.rerun()
+
 
 def page_commissions(tenant: dict, roster) -> None:
     agent_id = tenant["agent_id"]

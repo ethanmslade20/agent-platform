@@ -472,6 +472,41 @@ def save_records(agent_id: str, new_records: pd.DataFrame, mapping: dict, sig: s
     return len(combined)
 
 
+def uploaded_files(agent_id: str) -> pd.DataFrame:
+    """One row per uploaded statement (source_file) with the month(s) it covers,
+    line count and total $ — so the UI can list uploads each with a Remove button."""
+    recs = load_records(agent_id)
+    if recs is None or recs.empty or "source_file" not in recs.columns:
+        return pd.DataFrame(columns=["source_file", "months", "lines", "total"])
+    amt = pd.to_numeric(recs["amount"], errors="coerce").fillna(0.0)
+    out = (recs.assign(_amt=amt).groupby("source_file")
+           .agg(lines=("_amt", "size"), total=("_amt", "sum")).reset_index())
+    if "period" in recs.columns:
+        mo = (recs[recs["period"].astype(str) != "Unknown"]
+              .groupby("source_file")["period"]
+              .apply(lambda s: ", ".join(sorted({str(x) for x in s}))))
+        out["months"] = out["source_file"].map(mo).fillna("")
+    else:
+        out["months"] = ""
+    return out.sort_values("source_file").reset_index(drop=True)
+
+
+def remove_file(agent_id: str, source_file: str) -> int:
+    """Delete every commission row that came from one uploaded statement, so a
+    mis-filed or wrong-month upload can be pulled and re-done without double-
+    counting. Rewrites the store (and mirrors to the DB). Returns rows left."""
+    recs = load_records(agent_id)
+    if recs is None or recs.empty or "source_file" not in recs.columns:
+        return 0
+    kept = recs[recs["source_file"].astype(str) != str(source_file)].copy()
+    paths.ensure_dirs(agent_id)
+    rp = _records_path(agent_id)
+    kept.to_parquet(rp, index=False)
+    if store.using_db():
+        store.put_file(agent_id, "data/commissions.parquet", rp.read_bytes())
+    return len(kept)
+
+
 def summary(records: pd.DataFrame) -> dict:
     """Totals for the Money Received view: grand total, this-month, by carrier, by month."""
     if records is None or records.empty:
