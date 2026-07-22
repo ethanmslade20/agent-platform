@@ -1825,10 +1825,10 @@ _SETTINGS_CSS = """<style>
   .st-key-statelist [data-testid="stButton"] button[kind="primary"],
   .st-key-statelist button[data-testid="stBaseButton-primary"]{
      background:rgba(59,130,246,.16)!important;border-color:#3b82f6!important;}
-  .st-key-statelist [data-testid="stButton"] button[kind="primary"] p,
-  .st-key-statelist [data-testid="stButton"] button[kind="primary"] div,
-  .st-key-statelist button[data-testid="stBaseButton-primary"] p,
-  .st-key-statelist button[data-testid="stBaseButton-primary"] div{color:var(--text)!important;}
+  .st-key-statelist [data-testid="stButton"] button[kind="primary"],
+  .st-key-statelist [data-testid="stButton"] button[kind="primary"] *,
+  .st-key-statelist button[data-testid="stBaseButton-primary"],
+  .st-key-statelist button[data-testid="stBaseButton-primary"] *{color:#1e293b!important;}
   /* carrier checkbox grid → selectable cards */
   .st-key-carriergrid [data-testid="stCheckbox"]{border:1px solid rgba(96,165,250,.18);border-radius:10px;
      padding:11px 13px;background:var(--input-bg);transition:border-color .12s,background .12s;}
@@ -1972,7 +1972,11 @@ def page_settings(tenant: dict, roster) -> None:
                     grid = st.columns(3)
                     for i, brand in enumerate(shown):
                         key = f"cb_{edit}_{brand}"
-                        st.session_state[key] = brand in selected  # sync from saved before widget
+                        # Seed the checkbox from the saved value ONCE, then let the widget own
+                        # its state. Re-assigning every run (the old behavior) overwrote the
+                        # user's click on the post-click rerun, so toggles appeared to revert.
+                        if key not in st.session_state:
+                            st.session_state[key] = brand in selected
                         grid[i % 3].checkbox(brand, key=key, on_change=_toggle, args=(edit, brand, key))
                     if not shown:
                         st.caption("No carriers match your search.")
