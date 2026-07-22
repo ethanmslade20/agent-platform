@@ -312,16 +312,20 @@ def build_book(agent_id: str, npn: str = "", name: str = ""):
 
 
 def _agent_last_paid(agent_id: str) -> dict:
-    """Money-backed 'last month paid per client' from the agent's uploaded commission
-    statements — {name_key: 'YYYY-MM'}, name_key = first+last letters. Best-effort."""
+    """Money-backed 'last month paid' lookups from the agent's uploaded commission
+    statements — {"by_policy": {policy: 'YYYY-MM'}, "by_name": {name_key: 'YYYY-MM'},
+    "by_carrier_names": {brand: {name_key: 'YYYY-MM'}}} — so loss-dating can match a gone
+    client by policy ID (name-independent), then exact name, then fuzzy name within the
+    same carrier. Best-effort; empty if there are no commission records."""
     import re
     from core import commissions_ingest
+    empty = {"by_policy": {}, "by_name": {}, "by_carrier_names": {}}
     try:
         recs = commissions_ingest.load_records(agent_id)
     except Exception:
-        return {}
+        return empty
     if recs is None or recs.empty or "client" not in recs.columns or "period" not in recs.columns:
-        return {}
+        return empty
 
     def _key(m):
         x = re.sub(r"\b(family|household)\b", "", str(m), flags=re.I).strip()
@@ -331,16 +335,38 @@ def _agent_last_paid(agent_id: str) -> dict:
         p = x.split()
         return re.sub(r"[^a-z]", "", ((p[0] + p[-1]) if len(p) >= 2 else x).lower())
 
-    r = recs.copy()
-    r["_k"] = r["client"].apply(_key)
-    r["_m"] = r["period"].astype(str)
-    r = r[r["_m"].str.match(r"^\d{4}-\d{2}$")]
-    out = {}
-    if not r.empty:
-        for k, mx in r.groupby("_k")["_m"].max().items():
-            if k:
-                out[k] = mx
-    return out
+    def _polnorm(x):
+        v = re.sub(r"[^0-9a-z]", "", str(x).lower())
+        return v if len(v) >= 5 else ""
+
+    def _brand(c):
+        c = str(c).lower()
+        for kw, b in (("ambetter", "ambetter"), ("oscar", "oscar"), ("wellpoint", "anthem"),
+                      ("anthem", "anthem"), ("unitedhealth", "uhc"), ("united health", "uhc"),
+                      ("uhc", "uhc"), ("cigna", "cigna"), ("molina", "molina"),
+                      ("selecthealth", "selecthealth"), ("select health", "selecthealth"),
+                      ("blue", "bcbs"), ("bcbs", "bcbs")):
+            if kw in c:
+                return b
+        return re.sub(r"[^a-z]", "", c)[:10] or "other"
+
+    by_policy, by_name, by_carrier = {}, {}, {}
+    has_pol = "policy_id" in recs.columns
+    has_car = "carrier" in recs.columns
+    for _, row in recs.iterrows():
+        m = str(row.get("period", ""))
+        if not re.match(r"^\d{4}-\d{2}$", m):
+            continue
+        nk = _key(row.get("client"))
+        if nk:
+            by_name[nk] = max(by_name.get(nk, ""), m)
+            d = by_carrier.setdefault(_brand(row.get("carrier") if has_car else ""), {})
+            d[nk] = max(d.get(nk, ""), m)
+        if has_pol:
+            pn = _polnorm(row.get("policy_id"))
+            if pn:
+                by_policy[pn] = max(by_policy.get(pn, ""), m)
+    return {"by_policy": by_policy, "by_name": by_name, "by_carrier_names": by_carrier}
 
 
 def _book_brands(roster) -> dict:
