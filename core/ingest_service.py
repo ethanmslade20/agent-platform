@@ -302,13 +302,45 @@ def build_book(agent_id: str, npn: str = "", name: str = ""):
         if "cancel_reason" in roster.columns:
             roster.loc[_taken, "cancel_reason"] = rules.REASON_TAKEN
     # Loss dating: every gone client (AOR-taken, verification-expired, left-book,
-    # undated cancellation) that carries no cancel date gets one, anchored to the
-    # last month a snapshot showed them active. Without this they'd be counted
-    # active-forever in the month-over-month engine and never register as a loss,
-    # understating churn and overstating lifetime value. Runs last, after every
-    # status rule, so "who's gone" is final.
-    roster = assign_loss_months(roster)
+    # undated cancellation) that carries no cancel date gets one. We date it to the
+    # month the agent's COMMISSION on them stopped (money doesn't lie) — falling back
+    # to the exchange sync date, then the last month a snapshot showed them active.
+    # Without this they'd be counted active-forever in the month-over-month engine and
+    # never register as a loss, understating churn and overstating LTV. Runs last.
+    roster = assign_loss_months(roster, last_paid=_agent_last_paid(agent_id))
     return roster
+
+
+def _agent_last_paid(agent_id: str) -> dict:
+    """Money-backed 'last month paid per client' from the agent's uploaded commission
+    statements — {name_key: 'YYYY-MM'}, name_key = first+last letters. Best-effort."""
+    import re
+    from core import commissions_ingest
+    try:
+        recs = commissions_ingest.load_records(agent_id)
+    except Exception:
+        return {}
+    if recs is None or recs.empty or "client" not in recs.columns or "period" not in recs.columns:
+        return {}
+
+    def _key(m):
+        x = re.sub(r"\b(family|household)\b", "", str(m), flags=re.I).strip()
+        if "," in x:
+            last, rest = x.split(",", 1); p = rest.split()
+            return re.sub(r"[^a-z]", "", ((p[0] if p else "") + last).lower())
+        p = x.split()
+        return re.sub(r"[^a-z]", "", ((p[0] + p[-1]) if len(p) >= 2 else x).lower())
+
+    r = recs.copy()
+    r["_k"] = r["client"].apply(_key)
+    r["_m"] = r["period"].astype(str)
+    r = r[r["_m"].str.match(r"^\d{4}-\d{2}$")]
+    out = {}
+    if not r.empty:
+        for k, mx in r.groupby("_k")["_m"].max().items():
+            if k:
+                out[k] = mx
+    return out
 
 
 def _book_brands(roster) -> dict:

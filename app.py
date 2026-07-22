@@ -759,7 +759,7 @@ def page_dashboard(tenant: dict, roster) -> None:
     ])
 
     _hdr("Growth Metrics", "trend")
-    churn = (f"All history • {d['churn']:.2f}% monthly churn" if d["churn"] is not None else "All history")
+    churn = (f"Trailing 12 mo • {d['churn']:.2f}% monthly churn" if d["churn"] is not None else "Trailing 12 mo")
     _cards([
         ui.metric_card("Avg Policies Added / Month", fnum(d["added"]), sub=since_sub, icon_key="plus", spark=spark("New Policies", ui.GREEN)),
         ui.metric_card("Avg Policies Lost / Month", fnum(d["lost"]), sub=churn, icon_key="minus", spark=spark("Policies Lost", ui.RED)),
@@ -779,6 +779,20 @@ def page_dashboard(tenant: dict, roster) -> None:
         ui.metric_card("Expected Annual Commission", f"${d['comm_annual']:,.0f}", icon_key="calendar"),
         ui.metric_card("Commission Per Policy / Mo", f"${d['per_policy']:.2f}", icon_key="file"),
     ])
+
+    # Lifetime value = avg tenure (1 ÷ monthly churn) × commission per client. Uses REAL
+    # commission from uploaded statements when available, else the PMPM estimate. This is
+    # the honest max-CAC ceiling for ad spend.
+    if d.get("ltv") and d.get("tenure"):
+        _hdr("Lifetime Value", "trend")
+        _real = d.get("real_per_policy")
+        _pp_val = f"${(_real if _real is not None else d['per_policy']):.2f}"
+        _pp_sub = "latest full month, actual pay" if _real is not None else "estimate — upload statements for real"
+        _cards([
+            ui.metric_card("Avg Client Tenure", f"{d['tenure']:.0f} mo", sub=f"1 ÷ {d['churn']:.1f}% monthly churn", icon_key="calendar"),
+            ui.metric_card("Commission / Client / Mo", _pp_val, sub=_pp_sub, icon_key="dollar"),
+            ui.metric_card("Lifetime Value / Client", f"${d['ltv']:,.0f}", sub="max ad-spend per signup", icon_key="trend", highlight="green"),
+        ])
 
     _mom_len = 0 if (mom is None or getattr(mom, "empty", True)) else len(mom)
     if _mom_len < 3:
