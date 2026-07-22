@@ -2083,11 +2083,12 @@ def page_book(tenant: dict, roster) -> None:
     if {"Cancelled", "Terminated"} & _sts:
         _status_opts.append(_LOST_OPT)
     _status_opts += sorted(s for s in _sts if s not in {"Effectuated", "Cancelled", "Terminated"})
-    f1, f2, f3, f4 = st.columns([2, 2, 2, 3])
+    f1, f2, f3, f4, f5 = st.columns([2, 2, 2, 2, 3])
     sel_status = f1.selectbox("Status", _status_opts)
     sel_carrier = f2.selectbox("Carrier", ["All"] + sorted(df_all["carrier"].dropna().unique().tolist()))
     sel_state = f3.selectbox("State", ["All"] + sorted(df_all["state"].dropna().astype(str).unique().tolist()))
-    search = f4.text_input("Search by name", placeholder="First or last name…")
+    sel_prem = f4.selectbox("Premium", ["All", "$0 (no premium)", "Above $0"])
+    search = f5.text_input("Search by name", placeholder="First or last name…")
 
     df = df_all.copy()
     if sel_status == _LOST_OPT:
@@ -2098,6 +2099,9 @@ def page_book(tenant: dict, roster) -> None:
         df = df[df["carrier"] == sel_carrier]
     if sel_state != "All":
         df = df[df["state"].astype(str) == sel_state]
+    if sel_prem != "All":
+        _np = pd.to_numeric(df.get("net_premium"), errors="coerce").fillna(0)
+        df = df[(_np <= 0) if sel_prem.startswith("$0") else (_np > 0)]
     if search.strip():
         q = search.strip()
         df = df[df["first_name"].fillna("").str.contains(q, case=False)
@@ -2153,6 +2157,10 @@ def page_book(tenant: dict, roster) -> None:
     st.markdown("<br>", unsafe_allow_html=True)
 
     # ── Client roster table ─────────────────────────────────────────────────────
+    # When viewing gone clients, show the most-recently-cancelled at the top.
+    if sel_status == _LOST_OPT and "term_date" in df.columns:
+        df = df.assign(_td=pd.to_datetime(df["term_date"], errors="coerce")).sort_values(
+            "_td", ascending=False, na_position="last").drop(columns=["_td"])
     display_cols = ["first_name", "last_name", "carrier", "state", "status_display",
                     "effective_date", "term_date", "months_on_book", "applicant_count", "net_premium"]
     disp = df[[c for c in display_cols if c in df.columns]].rename(columns={"status_display": "status"}).copy()
