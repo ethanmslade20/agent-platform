@@ -642,3 +642,94 @@ def reconcile(roster, records, pmpm: int = 23) -> dict:
     out["monthly_gap"] = float(g["Est $/mo"].sum()) if not g.empty else 0.0
     out["unmatched"] = int(sum(1 for k in paid_name if k not in matched_names))
     return out
+
+
+# Default per-carrier pay lag (months from coverage → payment), matching Ethan's validated
+# carrier timings. Used for the month-focused gap view because the uploaded statements don't
+# carry the coverage month (so we can't learn the lag per tenant). Keyword-matched on carrier.
+_DEFAULT_LAGS = {
+    "ambetter": 1, "anthem": 1, "wellpoint": 1, "blue": 1, "bcbs": 1,
+    "university of utah": 1, "u of u": 1,
+    "cigna": 0, "molina": 0, "oscar": 0, "selecthealth": 0, "select health": 0,
+    "unitedhealth": 0, "united health": 0, "uhc": 0,
+}
+_DEFAULT_LAG = 1
+
+
+def _lag_for(carrier) -> int:
+    c = str(carrier).lower()
+    for kw, L in _DEFAULT_LAGS.items():
+        if kw in c:
+            return L
+    return _DEFAULT_LAG
+
+
+def month_gaps(roster, records, month: str = None, pmpm: int = 23) -> dict:
+    """Commission reconciliation FOCUSED ON ONE MONTH. Of the active clients whose payment
+    is DUE to land in `month` (effective month + the carrier's pay lag), how many have been
+    paid in that month and who's still missing. As statements for `month` upload, 'paid' grows
+    and 'missing' shrinks. Defaults to the current month. `closed` is True once statements
+    dated AFTER `month` exist (so the month's payments should all be in).
+    Returns {month, due, paid, missing(DataFrame), at_risk, closed}."""
+    import re
+    if not month:
+        month = pd.Timestamp.today().strftime("%Y-%m")
+    empty = {"month": month, "due": 0, "paid": 0, "missing": pd.DataFrame(),
+             "at_risk": 0.0, "closed": False}
+    if roster is None or getattr(roster, "empty", True):
+        return empty
+    from core import rules
+    active = roster[roster["status"].isin(rules.ACTIVE)].copy() if "status" in roster.columns else roster.copy()
+    if active.empty:
+        return empty
+
+    def _pk(f, l):
+        return re.sub(r"[^a-z]", "", f"{f}{l}".lower())
+
+    def _ck(m):
+        x = re.sub(r"\b(family|household)\b", "", str(m), flags=re.I).strip()
+        if "," in x:
+            last, rest = x.split(",", 1); p = rest.split()
+            return re.sub(r"[^a-z]", "", ((p[0] if p else "") + last).lower())
+        p = x.split()
+        return re.sub(r"[^a-z]", "", ((p[0] + p[-1]) if len(p) >= 2 else x).lower())
+
+    def _polnorm(x):
+        v = re.sub(r"[^0-9a-z]", "", str(x).lower())
+        return v if len(v) >= 5 else ""
+
+    # Who was PAID in `month`, + whether any statement is dated after it (month closed).
+    paid_names, paid_pols, closed = set(), set(), False
+    if records is not None and not records.empty and "period" in records.columns:
+        per = records["period"].astype(str)
+        rm = records[per == month]
+        if "client" in rm.columns:
+            paid_names = {_ck(x) for x in rm["client"]}
+        if "policy_id" in rm.columns:
+            paid_pols = {_polnorm(x) for x in rm["policy_id"]} - {""}
+        closed = bool((per > month).any())
+
+    Mp = pd.Period(month, "M")
+    rows, paid_ct, atrisk = [], 0, 0.0
+    for _, c in active.iterrows():
+        em = pd.to_datetime(c.get("effective_date"), errors="coerce")
+        if pd.isna(em):
+            continue
+        if (em.to_period("M") + _lag_for(c.get("carrier"))) > Mp:
+            continue  # not due to be paid yet in this month
+        nk = _pk(str(c.get("first_name", "")), str(c.get("last_name", "")))
+        pol = _polnorm(c.get("policy_number"))
+        if nk in paid_names or (pol and pol in paid_pols):
+            paid_ct += 1
+        else:
+            mem = pd.to_numeric(c.get("applicant_count"), errors="coerce")
+            mem = 1 if pd.isna(mem) else max(int(mem), 1)
+            atrisk += mem * pmpm
+            rows.append({"Client": f"{c.get('first_name', '')} {c.get('last_name', '')}".strip(),
+                         "Carrier": c.get("carrier", ""), "State": c.get("state", ""),
+                         "Members": mem, "Est $/mo": mem * pmpm, "Phone": c.get("phone", "")})
+    miss = pd.DataFrame(rows)
+    if not miss.empty:
+        miss = miss.sort_values("Est $/mo", ascending=False).reset_index(drop=True)
+    return {"month": month, "due": paid_ct + len(rows), "paid": paid_ct,
+            "missing": miss, "at_risk": float(atrisk), "closed": closed}

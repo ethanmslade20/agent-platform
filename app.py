@@ -1422,7 +1422,7 @@ def page_commissions(tenant: dict, roster) -> None:
         st.caption("Money Received comes straight from your uploaded statements. "
                    "Re-uploading the same file replaces its rows (no double-counting).")
 
-    # ── Commission gaps (reconcile paid records against the book) ────────────────
+    # ── Commission gaps — focused on ONE month (default: the month we're in) ─────
     if not recs.empty:
         st.markdown("<br>", unsafe_allow_html=True)
         st.divider()
@@ -1431,39 +1431,44 @@ def page_commissions(tenant: dict, roster) -> None:
             st.info("Upload your HealthSherpa book on the **Upload** page to cross-check who "
                     "you're actually being paid on.")
         else:
-            rec = commissions_ingest.reconcile(roster, recs)
-            if not rec["reconcilable"]:
-                st.info("These statements don't include client names or policy IDs, so per-client "
-                        "gap-checking isn't possible yet. Re-add a statement and map a **Client** or "
-                        "**Policy / member ID** column to unlock this.")
+            # Month picker — current month first; look back to catch old gaps.
+            _first = pd.Timestamp(dt.date.today().replace(day=1))
+            _mopts = [(_first - pd.DateOffset(months=i)).strftime("%Y-%m") for i in range(0, 13)]
+            _mlab = {m: pd.to_datetime(m + "-01").strftime("%B %Y") for m in _mopts}
+            _sel = st.selectbox("Month", _mopts, format_func=lambda m: _mlab[m], key="gap_month")
+            mg = commissions_ingest.month_gaps(roster, recs, month=_sel)
+            _isnow = _sel == dt.date.today().strftime("%Y-%m")
+            _allpaid = mg["due"] > 0 and mg["paid"] == mg["due"]
+            _cards([
+                ui.metric_card("Paid This Month", f"{mg['paid']}/{mg['due']}",
+                               sub=f"clients due in {_mlab[_sel]}", icon_key="users",
+                               highlight="green" if _allpaid else False),
+                ui.metric_card("Still Missing", f"{len(mg['missing']):,}",
+                               sub="due but not yet paid", icon_key="minus",
+                               highlight="gold" if len(mg["missing"]) else "green"),
+                ui.metric_card("$ At Risk", f"${mg['at_risk']:,.0f}",
+                               sub=f"for {_mlab[_sel]}", icon_key="dollar",
+                               highlight="red" if mg["at_risk"] else False),
+            ])
+            if mg["due"] == 0:
+                st.caption(f"No clients were due a payment in {_mlab[_sel]}.")
+            elif _allpaid:
+                st.success(f"✅ You've been paid on all {mg['due']} clients due in {_mlab[_sel]}.")
+            elif _isnow and not mg["closed"]:
+                st.info(f"⏳ {_mlab[_sel]} is still in progress — {mg['paid']} of {mg['due']} due clients "
+                        f"paid so far. As your {_mlab[_sel]} statements upload, this fills in.")
             else:
-                full = rec["active"] > 0 and rec["paid"] == rec["active"]
-                _cards([
-                    ui.metric_card("Paid Coverage", f"{rec['paid']}/{rec['active']}",
-                                   sub="active clients you're paid on", icon_key="users",
-                                   highlight="green" if full else False),
-                    ui.metric_card("Gaps to Chase", f"{len(rec['gaps']):,}",
-                                   sub="active but unpaid or stopped", icon_key="minus",
-                                   highlight="gold" if len(rec["gaps"]) else "green"),
-                    ui.metric_card("$/mo At Risk", f"${rec['monthly_gap']:,.0f}",
-                                   sub="commission you may be owed", icon_key="dollar",
-                                   highlight="red" if rec["monthly_gap"] else False),
-                ])
-                if rec["gaps"].empty:
-                    st.success("Every active client has a matching commission — no gaps found. 🎉")
-                else:
-                    st.markdown("<br>", unsafe_allow_html=True)
-                    with st.container(border=True):
-                        st.markdown(ui.chart_head("Active clients you're not getting paid on",
-                            "“Never paid” = no matching commission on record. “Stopped” = paid "
-                            "before, nothing in the last 2 statement months (likely a dispute to file).", "minus"),
-                            unsafe_allow_html=True)
-                        gdf = rec["gaps"].copy()
-                        gdf["Est $/mo"] = gdf["Est $/mo"].map(lambda v: f"${v:,.0f}")
-                        ui.styled_table(gdf, height=min(46 + 35 * (len(gdf) + 1), 600), bare=True)
-                    if rec["unmatched"]:
-                        st.caption(f"↳ {rec['unmatched']} payment name(s) didn't match an active client — "
-                                   "usually churned clients or a name spelled differently on the statement.")
+                st.warning(f"{len(mg['missing'])} active client(s) you should have been paid on in "
+                           f"{_mlab[_sel]} — likely disputes to file.")
+            if not mg["missing"].empty:
+                st.markdown("<br>", unsafe_allow_html=True)
+                with st.container(border=True):
+                    st.markdown(ui.chart_head(f"Not paid in {_mlab[_sel]}",
+                        "Active clients whose payment was due this month (by carrier timing) but "
+                        "hasn't landed yet.", "minus"), unsafe_allow_html=True)
+                    gdf = mg["missing"].copy()
+                    gdf["Est $/mo"] = gdf["Est $/mo"].map(lambda v: f"${v:,.0f}")
+                    ui.styled_table(gdf, height=min(46 + 35 * (len(gdf) + 1), 600), bare=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
     st.divider()
