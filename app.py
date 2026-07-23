@@ -1478,14 +1478,16 @@ def page_commissions(tenant: dict, roster) -> None:
     members = int(d["members"])
     mom = d.get("mom")
 
-    # LTV from all-time churn (same basis as the Goals page).
-    if mom is not None and not getattr(mom, "empty", True) and {"Members Lost", "Total Members"}.issubset(mom.columns):
-        churn_rate = mom["Members Lost"].sum() / max(mom["Total Members"].sum(), 1)
-    else:
-        churn_rate = 0.0
-    tenure = min(1 / churn_rate if churn_rate > 0 else MAX_TENURE, MAX_TENURE)
-    ltv_per = round(PMPM * tenure)
-    book_ltv = members * ltv_per
+    # LTV = the validated method (identical to the Dashboard's Lifetime Value cards —
+    # one source of truth): 12-month weighted churn → tenure × REAL commission per client.
+    # dashboard_kpis already computed these on `d`, so we just read them (no re-deriving
+    # from all-time churn + the $23 estimate, which overstated both).
+    policies = int(d.get("policies") or 0)
+    tenure = d.get("tenure")
+    ltv_per = d.get("ltv")
+    churn_pct = d.get("churn")
+    ltv_pp = d.get("real_per_policy") if d.get("real_per_policy") is not None else d.get("per_policy")
+    book_ltv = (ltv_per * policies) if (ltv_per and policies) else 0.0
 
     # ── Recurring revenue ───────────────────────────────────────────────────────
     _hdr("Recurring Revenue", "dollar")
@@ -1497,16 +1499,19 @@ def page_commissions(tenant: dict, roster) -> None:
     ])
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # ── Lifetime value ──────────────────────────────────────────────────────────
+    # ── Lifetime value (identical to the Dashboard) ─────────────────────────────
     _hdr("Lifetime Value", "trend")
-    _cards([
-        ui.metric_card("LTV per Member", f"${ltv_per:,}",
-                       sub=f"${PMPM}/mo × {tenure:.0f}-mo tenure", icon_key="users"),
-        ui.metric_card("Total Book LTV", f"${book_ltv:,.0f}",
-                       sub=f"{members:,} members × ${ltv_per:,}", icon_key="shield", highlight="green"),
-        ui.metric_card("Avg Client Tenure", f"{tenure:.0f} mo",
-                       sub=f"{churn_rate * 100:.2f}% monthly churn", icon_key="calendar"),
-    ])
+    if ltv_per and tenure:
+        _cards([
+            ui.metric_card("LTV per Client", f"${ltv_per:,.0f}",
+                           sub=f"${ltv_pp:.2f}/mo × {tenure:.0f}-mo tenure", icon_key="users"),
+            ui.metric_card("Total Book LTV", f"${book_ltv:,.0f}",
+                           sub=f"{policies:,} clients × ${ltv_per:,.0f}", icon_key="shield", highlight="green"),
+            ui.metric_card("Avg Client Tenure", f"{tenure:.0f} mo",
+                           sub=f"{churn_pct:.1f}% monthly churn" if churn_pct else "—", icon_key="calendar"),
+        ])
+    else:
+        st.caption("Lifetime value appears once there's enough churn history + commission data.")
     st.markdown("<br>", unsafe_allow_html=True)
 
     # ── Where the commission comes from (per carrier) ───────────────────────────
