@@ -336,14 +336,17 @@ def build_book(agent_id: str, npn: str = "", name: str = ""):
     from core import carrier_names
     if "carrier" in roster.columns:
         roster["carrier"] = roster["carrier"].apply(carrier_names.brand_of)
-    # AOR'd = gone. The rule: if a client's agent-of-record now shows ANOTHER agent
-    # and they were ever yours, they've been taken — drop them from active. "Were
-    # yours" is guaranteed upstream: the HealthSherpa ingest's require_ever_mine keeps
-    # only clients this agent was ever the agent for, so anyone left in the roster with
-    # a foreign AOR was yours and is now someone else's. Blank/none AOR (a disconnect)
-    # stays active — still yours, just needs a reconnect; it only surfaces on AOR at
-    # Risk. No at-risk-list requirement (policy_aor is the truth). Runs last so it wins
-    # over carrier-truth and the state-exchange restore.
+    # AOR'd = gone — but ONLY when HealthSherpa itself confirms it. This matches Ethan's
+    # site EXACTLY. A foreign agent-of-record field alone does NOT remove a client,
+    # because HealthSherpa's policy_aor field LAGS the exchange and over-removes real
+    # clients (dropping on the raw field wrongly cancelled ~15 of Ethan's still-active
+    # clients and cratered Blake's book). A client counts as taken only when BOTH:
+    #   1. they're on HealthSherpa's own AOR at-risk export (ffm_app_id in that list), AND
+    #   2. their policy_aor now shows another agent.
+    # Blank/none AOR (a disconnect) stays active — still yours, just needs a reconnect.
+    # A foreign AOR NOT on the at-risk list stays active and only surfaces on AOR at Risk.
+    # No at-risk list uploaded → flag-only, nothing removed. Runs last so it wins over
+    # carrier-truth and the state-exchange restore.
     #
     # REQUIRES an NPN. Without one, require_ever_mine is dropped upstream (no "were
     # yours" scope) AND "foreign" can only be guessed from the name — so dropping here
@@ -351,6 +354,8 @@ def build_book(agent_id: str, npn: str = "", name: str = ""):
     # Blake case). No NPN → skip the drop entirely; the AOR at Risk page still flags
     # these, but nothing is force-removed from active until the account has an NPN.
     if str(npn).strip() and "policy_aor" in roster.columns:
+        import re as _re_aor
+        import pandas as _pd_aor
         _parts = [p for p in (name or "").lower().split() if p]
 
         def _foreign_aor(a):
@@ -363,7 +368,14 @@ def build_book(agent_id: str, npn: str = "", name: str = ""):
                 return False
             return True
 
-        _taken = roster["policy_aor"].apply(_foreign_aor)
+        _foreign = roster["policy_aor"].apply(_foreign_aor)
+        # Second condition: HealthSherpa's own AOR at-risk export confirms the loss.
+        _risk_ids = load_aor_at_risk_ids(agent_id)
+        if _risk_ids and "ffm_app_id" in roster.columns:
+            _cid = roster["ffm_app_id"].apply(lambda x: _re_aor.sub(r"[^0-9]", "", str(x)))
+            _taken = _foreign & _cid.isin(_risk_ids)
+        else:
+            _taken = _pd_aor.Series(False, index=roster.index)  # no list → flag-only
         roster.loc[_taken, "status"] = "Cancelled"
         if "cancel_reason" in roster.columns:
             roster.loc[_taken, "cancel_reason"] = rules.REASON_TAKEN
