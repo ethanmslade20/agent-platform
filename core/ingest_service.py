@@ -294,6 +294,42 @@ def build_book(agent_id: str, npn: str = "", name: str = ""):
     # One client, one active policy — collapse plan switches (keep newest active,
     # term the older one) so a person never shows twice in the book.
     roster = rules.collapse_plan_switches(roster)
+    # STATE-EXCHANGE RE-ACTIVATION. A client enrolled through a state-based
+    # marketplace (Georgia Access / Get Covered IL / Virginia — source=access) holds
+    # active coverage that never appears in a carrier's FFM portal book, so the
+    # carrier-truth pass above can wrongly lapse them off an OLD FFM plan. Restore
+    # anyone the agent's raw state-exchange books still list ACTIVE who got cancelled
+    # here with a still-BLANK cancel_reason (carrier-truth lapses are the only
+    # cancellation that leaves it blank — AOR-taken, plan-switch, verification-expired
+    # and left-book all stamp a reason, so none of those are ever restored). Reads the
+    # raw uploaded books (dry_run) so the ingest HS-dedup can't hide them. No-op for an
+    # agent with no state-exchange upload. Runs before the AOR drop so a foreign-AOR
+    # state client still ends up taken.
+    try:
+        import pandas as _pd_se
+        from tracker.ingest import ingest_file as _ing_se, detect_source as _det_se
+        _se_cfg = load_carrier_configs(_CARRIER_CFG)
+        _SE_ACTIVE = {"Effectuated", "PendingEffectuation", "PendingFollowups"}
+        _se_keys: set = set()
+        for _bp in sorted(paths.input_dir(agent_id).glob("*.csv")):
+            if _det_se(_bp.name, _se_cfg) != "access":
+                continue
+            _, _sdf = _ing_se(_bp, _se_cfg, snap_dir, dry_run=True)
+            if _sdf is not None and {"name_key", "status"}.issubset(_sdf.columns):
+                _se_keys |= set(_sdf.loc[_sdf["status"].isin(_SE_ACTIVE), "name_key"].dropna())
+        if _se_keys and {"name_key", "status"}.issubset(roster.columns):
+            _se_blank = (roster.get("cancel_reason", _pd_se.Series("", index=roster.index))
+                         .fillna("").astype(str).str.strip() == "")
+            _se_restore = (roster["status"].isin(list(rules.CHURNED))
+                           & _se_blank & roster["name_key"].isin(_se_keys))
+            if _se_restore.any():
+                roster.loc[_se_restore, "status"] = "Effectuated"
+                if "term_date" in roster.columns:
+                    roster.loc[_se_restore, "term_date"] = _pd_se.NaT
+                if "term_estimated" in roster.columns:
+                    roster.loc[_se_restore, "term_estimated"] = False
+    except Exception:
+        pass  # fail-safe: a bad state-exchange book must never break the book build
     # Collapse per-state carrier entities to their brand (e.g. "Ambetter from Peach
     # State Health Plan", "Ambetter of Tennessee" → "Ambetter") so charts/tables
     # group by carrier the way Ethan's site does — done last, after carrier-truth.
