@@ -305,24 +305,28 @@ def build_book(agent_id: str, npn: str = "", name: str = ""):
     # of the active count — a stolen client isn't active. Blank-AOR (disconnected) ones
     # on the list stay active (still yours, just needs a reconnect). They still surface
     # on AOR at Risk, which keys off the at-risk list, not status. Done last so it wins.
-    _at = load_aor_at_risk_ids(agent_id)
-    if _at and "ffm_app_id" in roster.columns and "policy_aor" in roster.columns:
-        import re as _re
-        _ids = {_re.sub(r"[^0-9]", "", str(x)) for x in _at} - {""}
-        _rid = roster["ffm_app_id"].apply(lambda x: _re.sub(r"[^0-9]", "", str(x)))
+    # AOR'd = gone. The rule: if a client's agent-of-record now shows ANOTHER agent
+    # and they were ever yours, they've been taken — drop them from active. "Were
+    # yours" is guaranteed upstream: the HealthSherpa ingest's require_ever_mine keeps
+    # only clients this agent was ever the agent for, so anyone left in the roster with
+    # a foreign AOR was yours and is now someone else's. Blank/none AOR (a disconnect)
+    # stays active — still yours, just needs a reconnect; it only surfaces on AOR at
+    # Risk. No at-risk-list requirement (policy_aor is the truth). Runs last so it wins
+    # over carrier-truth and the state-exchange restore.
+    if "policy_aor" in roster.columns:
         _parts = [p for p in (name or "").lower().split() if p]
 
         def _foreign_aor(a):
             al = str(a or "").lower()
             if npn and str(npn) in str(a):
                 return False
-            if not al.strip() or "none" in al:
+            if not al.strip() or "none" in al:   # blank/none = disconnected, still yours
                 return False
             if _parts and all(p in al for p in _parts):
                 return False
             return True
 
-        _taken = _rid.isin(_ids) & roster["policy_aor"].apply(_foreign_aor)
+        _taken = roster["policy_aor"].apply(_foreign_aor)
         roster.loc[_taken, "status"] = "Cancelled"
         if "cancel_reason" in roster.columns:
             roster.loc[_taken, "cancel_reason"] = rules.REASON_TAKEN
