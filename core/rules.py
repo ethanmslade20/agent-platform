@@ -26,11 +26,16 @@ REASON_SWITCH = "Plan switch"
 
 
 def collapse_plan_switches(roster: pd.DataFrame) -> pd.DataFrame:
-    """One client, one active policy. If a person shows more than one active
-    policy (a plan switch — e.g. Ambetter → UnitedHealthcare), keep the newest by
-    effective date active and mark the older ones Terminated ('Plan switch').
-    They're flagged term_estimated so a switch is NOT miscounted as a real loss in
-    the churn/loss averages, and they're excluded from the Re-Engage list."""
+    """One client, one active policy. Within a single name+STATE, a person showing
+    more than one active policy is collapsed to their current plan (latest effective)
+    and the rest are Terminated ('Plan switch'; term_estimated so a switch isn't
+    miscounted as a real loss and is left off Re-Engage). Two active rows are the SAME
+    person if they share an id (app / subscriber / email / phone), are on DIFFERENT
+    carriers (a person holds one active marketplace plan), or are the SAME carrier with
+    an identical effective date (a duplicate enrollment). Two same-carrier rows with
+    different effective dates and no shared id are LEFT ALONE — that's the genuine
+    same-name-in-the-same-state stranger case, so two different people are never merged.
+    Scoping to name+STATE also protects same-name people in different states."""
     if roster is None or roster.empty or "status" not in roster.columns:
         return roster
     df = roster.copy()
@@ -39,26 +44,63 @@ def collapse_plan_switches(roster: pd.DataFrame) -> pd.DataFrame:
     if "term_estimated" not in df.columns:
         df["term_estimated"] = False
 
-    def _pk(f, l):
-        s = f"{f} {l}".lower()
-        return re.sub(r"[^a-z]", "", s)
+    def _col(c):
+        return df[c] if c in df.columns else pd.Series("", index=df.index)
 
-    df["_pk"] = [_pk(f, l) for f, l in zip(df.get("first_name", ""), df.get("last_name", ""))]
-    df["_eff"] = pd.to_datetime(df.get("effective_date"), errors="coerce")
+    nm = (_col("first_name").fillna("").astype(str) + _col("last_name").fillna("").astype(str)
+          ).str.lower().str.replace(r"[^a-z]", "", regex=True)
+    st = _col("state").fillna("").astype(str).str.lower().str.strip()
+    key = nm + "@" + st
     active = df["status"].isin(ACTIVE)
-    counts = df.loc[active, "_pk"].value_counts()
-    for k in counts[counts > 1].index:
-        if not k:
+    eff = pd.to_datetime(df.get("effective_date"), errors="coerce")
+    cur = pd.to_datetime(df.get("current_effective"), errors="coerce")
+    cur = cur.where(cur.notna(), eff)
+    car = _col("carrier").astype(str).str.lower()
+    sid = _col("ffm_subscriber_id").astype(str).str.replace(r"[^0-9]", "", regex=True)
+    app = _col("ffm_app_id").astype(str).str.replace(r"[^0-9]", "", regex=True)
+    em = _col("email").fillna("").astype(str).str.lower().str.strip()
+    ph = _col("phone").astype(str).str.replace(r"[^0-9]", "", regex=True).str[-10:]
+
+    def _same(i, j):
+        if app[i] and app[i] == app[j]:
+            return True                       # same FFM application
+        if sid[i] and sid[i] == sid[j]:
+            return True                       # same subscriber id
+        if em[i] and em[i] == em[j]:
+            return True
+        if ph[i] and ph[i] == ph[j]:
+            return True
+        if car[i] != car[j]:
+            return True                       # cross-carrier switch
+        return bool(eff[i] == eff[j])         # same carrier: a dup only if identical eff
+
+    for k, cnt in key[active].value_counts().items():
+        if cnt < 2 or k.startswith("@"):
             continue
-        grp = df[active & (df["_pk"] == k)].sort_values("_eff", ascending=False, na_position="last")
-        newest_eff = grp.iloc[0]["_eff"]
-        for idx in grp.index[1:]:  # everyone except the newest policy
-            df.at[idx, "status"] = "Terminated"
-            df.at[idx, "cancel_reason"] = REASON_SWITCH
-            df.at[idx, "term_estimated"] = True
-            if "term_date" in df.columns and pd.isna(pd.to_datetime(df.at[idx, "term_date"], errors="coerce")):
-                df.at[idx, "term_date"] = newest_eff
-    return df.drop(columns=["_pk", "_eff"])
+        idxs = list(df.index[active & (key == k)])
+        clusters: list = []
+        for i in idxs:
+            for cl in clusters:
+                if any(_same(i, j) for j in cl):
+                    cl.append(i)
+                    break
+            else:
+                clusters.append([i])
+        for cl in clusters:
+            if len(cl) < 2:
+                continue
+            newest = max(cl, key=lambda x: (pd.notna(cur[x]),
+                                            cur[x] if pd.notna(cur[x]) else pd.Timestamp.min))
+            for i in cl:
+                if i == newest:
+                    continue
+                df.at[i, "status"] = "Terminated"
+                df.at[i, "cancel_reason"] = REASON_SWITCH
+                df.at[i, "term_estimated"] = True
+                if "term_date" in df.columns and pd.isna(
+                        pd.to_datetime(df.at[i, "term_date"], errors="coerce")):
+                    df.at[i, "term_date"] = cur[newest]
+    return df
 
 
 def apply_book_rules(roster: pd.DataFrame, npn: str = "", name: str = "") -> pd.DataFrame:
