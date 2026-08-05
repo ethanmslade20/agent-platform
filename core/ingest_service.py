@@ -124,6 +124,11 @@ def ingest_healthsherpa(agent_id: str, data: bytes, npn: str = "", name: str = "
                 f"unchecked). Re-export from HealthSherpa with a Custom date range and "
                 f"both boxes checked. Your book was left unchanged.")
     dest.write_bytes(data)
+    # Persist the raw CSV to the DB too (not just the snapshot). On the host every
+    # reboot starts a fresh container that hydrates from the DB — without this the
+    # input/ CSV is gone, so the partial-pull guard above has no baseline to compare.
+    if store.using_db():
+        store.put_file(agent_id, f"input/{dest.name}", data)
     source_configs = _scope_ownership(load_carrier_configs(_CARRIER_CFG), npn, name)
     # full_config omitted → skip the per-agent licensing matrix (that's Ethan's; a
     # future per-tenant setting). Keep all of the agent's own clients.
@@ -158,6 +163,14 @@ def ingest_state_exchange(agent_id: str, data: bytes, state_key: str, month=None
     paths.ensure_dirs(agent_id)
     dest = paths.input_dir(agent_id) / f"book_of_business_{state_key}.csv"
     dest.write_bytes(data)
+    # CRITICAL: persist the raw CSV to the DB, not just the snapshot. The
+    # state-exchange RE-ACTIVATION in build_book re-reads these input CSVs to restore
+    # GA/IL/VA clients that carrier-truth wrongly lapsed. On the host, every reboot
+    # starts a fresh container that only hydrates DB-stored files — if the CSV isn't
+    # here it's gone, the restore silently no-ops, and ~24 state clients vanish from
+    # the book after every reboot (the live-vs-local GA/IL undercount, Aug 5).
+    if store.using_db():
+        store.put_file(agent_id, f"input/{dest.name}", data)
     source_configs = load_carrier_configs(_CARRIER_CFG)
     # full_config omitted → no licensing-matrix drop; keep all of the agent's clients.
     snap, df = ingest_file(dest, source_configs, paths.snapshots_dir(agent_id), month=month)
