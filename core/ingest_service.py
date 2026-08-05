@@ -23,6 +23,15 @@ from tracker.ingest import ingest_file, load_all_snapshots
 
 from core import paths, store
 
+# Partial-upload guard: reject a HealthSherpa export that's far smaller than the
+# agent's CURRENT book — almost always a partial pull (HealthSherpa "Last 30 days",
+# or the "Include unsubmitted search & claimed applications" box left unchecked).
+# Loading it would wrongly show a big chunk of the agent's book as lost. Purely
+# RELATIVE (vs the agent's own last upload) so it fits ANY book size: a new agent's
+# first upload has nothing to compare against and always passes, and a same-size or
+# bigger refresh always passes — so a real refresh is never blocked.
+_HS_MIN_FRACTION = 0.85
+
 
 def _uploads_file(agent_id: str) -> Path:
     return paths.tenant_root(agent_id) / "uploads.json"
@@ -98,6 +107,22 @@ def ingest_healthsherpa(agent_id: str, data: bytes, npn: str = "", name: str = "
     Returns (snapshot_path, dataframe). Raises with a human message on a bad file."""
     paths.ensure_dirs(agent_id)
     dest = paths.input_dir(agent_id) / "healthsherpa.csv"
+    # Guard against a partial pull overwriting a full book (see _HS_MIN_FRACTION).
+    # Checked BEFORE we write, so a bad file never touches the agent's book.
+    if dest.exists():
+        try:
+            _cur_rows = dest.read_bytes().count(b"\n") - 1
+        except Exception:
+            _cur_rows = 0
+        _new_rows = data.count(b"\n") - 1
+        if _cur_rows > 0 and _new_rows < int(_cur_rows * _HS_MIN_FRACTION):
+            raise ValueError(
+                f"this export has {_new_rows:,} clients but your current book has "
+                f"{_cur_rows:,} — it's missing about {_cur_rows - _new_rows:,}. That "
+                f"usually means a partial pull (a 'Last 30 days' date range, or the "
+                f"'Include unsubmitted search & claimed applications' box left "
+                f"unchecked). Re-export from HealthSherpa with a Custom date range and "
+                f"both boxes checked. Your book was left unchanged.")
     dest.write_bytes(data)
     source_configs = _scope_ownership(load_carrier_configs(_CARRIER_CFG), npn, name)
     # full_config omitted → skip the per-agent licensing matrix (that's Ethan's; a
