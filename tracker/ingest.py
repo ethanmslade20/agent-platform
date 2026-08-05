@@ -420,16 +420,30 @@ def load_all_snapshots(snapshot_dir: Path) -> dict:
     """
     Returns dict keyed by 'YYYY-MM' -> combined DataFrame for that month.
     All parquet files matching YYYY-MM_*.parquet are combined per month.
+
+    A single unreadable parquet (a truncated upload to the DB, or a pyarrow
+    version that can't deserialize an older file — the "Deserializing page header
+    failed" crash) is SKIPPED with a warning instead of taking down the whole app.
+    One bad month must never crash the entire site; the rest of the book still loads.
     """
     months = {}
+    skipped = []
     for f in sorted(snapshot_dir.glob("*.parquet")):
         parts = f.stem.split("_", 1)
         if len(parts) < 2:
             continue
         month_key = parts[0]
-        df = pd.read_parquet(f)
+        try:
+            df = pd.read_parquet(f)
+        except Exception as e:
+            skipped.append(f.name)
+            print(f"  !! skipping unreadable snapshot {f.name}: {e}")
+            continue
         months.setdefault(month_key, []).append(df)
 
+    if skipped:
+        print(f"  !! {len(skipped)} snapshot(s) skipped (corrupt/unreadable): "
+              f"{', '.join(skipped)} — re-upload the matching export(s) to restore them.")
     return {m: pd.concat(dfs, ignore_index=True) for m, dfs in months.items()}
 
 
