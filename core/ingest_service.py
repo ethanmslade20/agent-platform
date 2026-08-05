@@ -336,11 +336,6 @@ def build_book(agent_id: str, npn: str = "", name: str = ""):
     from core import carrier_names
     if "carrier" in roster.columns:
         roster["carrier"] = roster["carrier"].apply(carrier_names.brand_of)
-    # AOR'd = gone. Clients on HealthSherpa's OWN at-risk list whose agent-of-record
-    # field now shows ANOTHER agent are marked Cancelled ("AOR taken") so they drop out
-    # of the active count — a stolen client isn't active. Blank-AOR (disconnected) ones
-    # on the list stay active (still yours, just needs a reconnect). They still surface
-    # on AOR at Risk, which keys off the at-risk list, not status. Done last so it wins.
     # AOR'd = gone. The rule: if a client's agent-of-record now shows ANOTHER agent
     # and they were ever yours, they've been taken — drop them from active. "Were
     # yours" is guaranteed upstream: the HealthSherpa ingest's require_ever_mine keeps
@@ -349,7 +344,13 @@ def build_book(agent_id: str, npn: str = "", name: str = ""):
     # stays active — still yours, just needs a reconnect; it only surfaces on AOR at
     # Risk. No at-risk-list requirement (policy_aor is the truth). Runs last so it wins
     # over carrier-truth and the state-exchange restore.
-    if "policy_aor" in roster.columns:
+    #
+    # REQUIRES an NPN. Without one, require_ever_mine is dropped upstream (no "were
+    # yours" scope) AND "foreign" can only be guessed from the name — so dropping here
+    # would wrongly mark an agent's own active clients as taken (the ethan-slade-vs-
+    # Blake case). No NPN → skip the drop entirely; the AOR at Risk page still flags
+    # these, but nothing is force-removed from active until the account has an NPN.
+    if str(npn).strip() and "policy_aor" in roster.columns:
         _parts = [p for p in (name or "").lower().split() if p]
 
         def _foreign_aor(a):
