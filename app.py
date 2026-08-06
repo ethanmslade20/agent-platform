@@ -2114,11 +2114,21 @@ def page_settings(tenant: dict, roster) -> None:
                     if not shown:
                         st.caption("No carriers match your search.")
 
-                # Save whenever the on-screen picks differ from what's stored. The build's
-                # auto-seed runs only on the first upload, so a removal here now sticks.
+                # Save whenever the on-screen picks differ from what's stored.
                 final = {b for b in shown if picks.get(b)} | (selected - set(shown))
                 if final != selected:
-                    settings.save(agent_id, {**cfg, "appointments": {**appts, edit: sorted(final)}})
+                    # LOCK the choice in: record EVERY carrier available for this state in
+                    # appt_seen (acknowledged). build_book's auto-appoint re-adds any book
+                    # carrier NOT in appt_seen — so a carrier you just UNCHECKED, being in the
+                    # book but absent from appt_seen, was silently re-appointed on the next
+                    # build ("appointments reset after I leave Settings"). Acknowledging every
+                    # option here makes a de-selection stick; genuinely-new carriers (not yet
+                    # in the book, so not in opts) still surface later via the heads-up.
+                    _seen = {k: set(v or []) for k, v in (cfg.get("appt_seen") or {}).items()}
+                    _seen[edit] = _seen.get(edit, set()) | set(opts) | selected | final
+                    settings.save(agent_id, {**cfg,
+                                             "appointments": {**appts, edit: sorted(final)},
+                                             "appt_seen": {k: sorted(v) for k, v in _seen.items()}})
                     st.rerun()
 
                 names = ", ".join(sorted(final)) if final else "none yet"

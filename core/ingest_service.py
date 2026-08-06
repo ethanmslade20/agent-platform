@@ -543,29 +543,18 @@ def _auto_seed_appointments(agent_id: str, roster) -> None:
                                  "appt_seen": {st: sorted(b) for st, b in book.items()},
                                  "appointments_initialized": True})
         return
-    # Already initialized. The current book is scoped to the agent's OWN clients
-    # (require_ever_mine keeps only clients they were ever agent-of-record for), so every
-    # carrier/state in it is one they actually write. Keep appointments a SUPERSET of the
-    # current book so the appointment filter can NEVER drop an agent's own client. A
-    # carrier that was acknowledged into appt_seen but left OFF (dismissed from the
-    # new-carrier heads-up, or just never turned on) was still silently removing that
-    # agent's real clients from the active count — that undercounted Ethan's book ~45 vs
-    # his personal site (whole states LA/IA/AR/OK/WI + newer carriers elsewhere). To leave
-    # a carrier out of the book entirely, use excluded_carriers (honored downstream); the
-    # per-state appointment list is not the tool for hiding your own clients.
-    appts = {str(k).upper(): set(v or []) for k, v in (cfg.get("appointments") or {}).items()}
-    seen = {str(k).upper(): set(v or []) for k, v in (cfg.get("appt_seen") or {}).items()}
-    changed = False
-    for st, brands in book.items():
-        want = {b for b in brands if b}
-        if want - appts.get(st, set()):
-            appts[st] = appts.get(st, set()) | want
-            seen[st] = seen.get(st, set()) | want
-            changed = True
-    if changed:
-        settings.save(agent_id, {**cfg,
-                                 "appointments": {k: sorted(v) for k, v in appts.items()},
-                                 "appt_seen": {k: sorted(v) for k, v in seen.items()}})
+    # Already initialized — NEVER auto-change appointments again. The agent owns them:
+    # whatever they turn OFF in Settings stays off. A genuinely-new carrier (present in the
+    # book but not yet in appt_seen) is surfaced in the Settings heads-up (new_carriers) for
+    # the agent to turn on or dismiss — we do NOT auto-appoint it. The old "keep appointments
+    # a superset of the book" behavior silently RE-APPOINTED any carrier the agent had just
+    # unchecked (it was in the book but absent from their trimmed list), which both reset
+    # their Settings edits and force-counted clients on carriers they don't write in that
+    # state (e.g. BCBS-AL, CareSource-GA). To hide an entire carrier everywhere regardless of
+    # state, use excluded_carriers. Legacy agents with no appt_seen: acknowledge their whole
+    # current book once so the heads-up only flags carriers that appear from here on.
+    if "appt_seen" not in cfg:
+        settings.save(agent_id, {**cfg, "appt_seen": {st: sorted(b) for st, b in book.items()}})
 
 
 def new_carriers(agent_id: str, roster) -> dict:
