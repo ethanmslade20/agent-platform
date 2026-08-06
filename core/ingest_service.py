@@ -176,6 +176,32 @@ def ingest_state_exchange(agent_id: str, data: bytes, state_key: str, month=None
     snap, df = ingest_file(dest, source_configs, paths.snapshots_dir(agent_id), month=month)
     if store.using_db() and snap:
         store.put_file(agent_id, f"snapshots/{Path(snap).name}", Path(snap).read_bytes())
+    # Also persist just this book's ACTIVE name_keys as a tiny JSON. build_book's
+    # re-activation reads it to restore GA/IL clients carrier-truth wrongly lapsed —
+    # a small always-hydrated file is far more reliable across host reboots than
+    # re-reading the raw CSV, so the restore can't silently no-op if the CSV is missing.
+    # NOTE: use a dry_run ingest (reads the file in ISOLATION) — the `df` above is
+    # deduped against HealthSherpa, which drops state clients who also appear in HS
+    # (e.g. a GA re-enroller whose old FFM plan is still in HS as terminated), and those
+    # are exactly the ones the restore must catch.
+    try:
+        _AC = {"Effectuated", "PendingEffectuation", "PendingFollowups"}
+        _, _full = ingest_file(dest, source_configs, paths.snapshots_dir(agent_id), dry_run=True)
+        if _full is not None and {"name_key", "status"}.issubset(_full.columns):
+            _keys = sorted(set(_full.loc[_full["status"].isin(_AC), "name_key"].dropna()))
+            _kp = paths.tenant_root(agent_id) / "state_active_keys.json"
+            _cur = {}
+            if _kp.exists():
+                try:
+                    _cur = json.loads(_kp.read_text())
+                except Exception:
+                    _cur = {}
+            _cur[state_key] = _keys
+            _kp.write_text(json.dumps(_cur, indent=2))
+            if store.using_db():
+                store.put_file(agent_id, "state_active_keys.json", _kp.read_bytes())
+    except Exception:
+        pass
     _seed_new_states(agent_id, df)
     _record_upload(agent_id, f"state_{state_key}")
     return snap, df
@@ -324,6 +350,23 @@ def build_book(agent_id: str, npn: str = "", name: str = ""):
         _se_cfg = load_carrier_configs(_CARRIER_CFG)
         _SE_ACTIVE = {"Effectuated", "PendingEffectuation", "PendingFollowups"}
         _se_keys: set = set()
+        # PRIMARY source: the tiny state_active_keys.json written at ingest time. It's a
+        # small always-hydrated file, so the restore works even on a fresh host container
+        # where the raw CSV wasn't pulled back (that was the silent GA/IL undercount).
+        _kp = paths.tenant_root(agent_id) / "state_active_keys.json"
+        if store.using_db() and not _kp.exists():
+            try:
+                store.hydrate(agent_id, paths.tenant_root(agent_id))
+            except Exception:
+                pass
+        if _kp.exists():
+            try:
+                for _v in json.loads(_kp.read_text()).values():
+                    _se_keys |= set(_v or [])
+            except Exception:
+                pass
+        # FALLBACK / also-union: re-read any raw access CSVs present on disk (dry_run so
+        # the HS-dedup can't hide them) — covers books ingested before the JSON existed.
         for _bp in sorted(paths.input_dir(agent_id).glob("*.csv")):
             if _det_se(_bp.name, _se_cfg) != "access":
                 continue
