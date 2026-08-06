@@ -2195,6 +2195,18 @@ def page_book(tenant: dict, roster) -> None:
     sel_prem = f4.selectbox("Premium", ["All", "$0 (no premium)", "Above $0"])
     search = f5.text_input("Search by name", placeholder="First or last name…")
 
+    # Export the ENTIRE book (every client, all columns — active AND inactive, incl. the
+    # cancel_reason that says WHY each gone client left) so it can be pulled off the site
+    # for a full reconciliation / deep dive against another system.
+    _export = df_all.drop(columns=[c for c in ("status_display",) if c in df_all.columns])
+    st.download_button(
+        "⬇  Download my full book (CSV)",
+        _export.to_csv(index=False).encode("utf-8"),
+        file_name="my_agent_book.csv",
+        mime="text/csv",
+        help="Every client in your book — active and inactive, all columns. Send this file to Claude for a deep dive.",
+    )
+
     df = df_all.copy()
     if sel_status == _LOST_OPT:
         df = df[df["status_display"].isin(["Cancelled", "Terminated"])]
