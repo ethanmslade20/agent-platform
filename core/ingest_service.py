@@ -209,26 +209,37 @@ def ingest_state_exchange(agent_id: str, data: bytes, state_key: str, month=None
 
 def _seed_new_states(agent_id: str, df) -> None:
     """Turn on the states + carriers this state-exchange file brings in, so its
-    clients aren't hidden by the appointment filter. Only ADDS (unions in the file's
-    states/brands) — it never removes, so anything the agent deliberately toggled off
-    elsewhere is untouched. Uploading a state's file implies you write there."""
+    clients aren't hidden by the appointment filter. Only auto-adds carriers the agent
+    has NEVER decided on (absent from appt_seen); a carrier they explicitly UNCHECKED in
+    Settings is recorded in appt_seen, so re-uploading the state-exchange book never
+    silently re-appoints it. (Before this guard, every GA/IL upload re-unioned the whole
+    file's carriers back in — wiping the agent's Settings trims. That was the
+    'carriers won't save' bug.) Uploading a state's file implies you write there."""
     from core import settings, carrier_names
     if df is None or df.empty or not {"state", "carrier"}.issubset(df.columns):
         return
     cfg = settings.get(agent_id)
     appts = dict(cfg.get("appointments") or {})
+    seen = {str(k).upper(): set(v or []) for k, v in (cfg.get("appt_seen") or {}).items()}
     changed = False
     for st, sub in df.groupby(df["state"].astype(str).str.upper().str.strip()):
         st = str(st).strip()
         if not st or st == "NAN":
             continue
         brands = {carrier_names.brand_of(c) for c in sub["carrier"].dropna() if carrier_names.brand_of(c)}
-        merged = sorted(set(appts.get(st) or []) | brands)
+        # Only auto-add carriers the agent has NEVER decided on (not yet in appt_seen).
+        fresh = brands - seen.get(st, set())
+        merged = sorted(set(appts.get(st) or []) | fresh)
         if merged != sorted(appts.get(st) or []):
             appts[st] = merged
+            # Record the newly-added carriers as seen, so a later re-upload treats them
+            # as decided (won't re-add after the agent unchecks them).
+            seen[st] = seen.get(st, set()) | fresh
             changed = True
     if changed:
-        settings.save(agent_id, {**cfg, "appointments": appts, "appointments_initialized": True})
+        settings.save(agent_id, {**cfg, "appointments": appts,
+                                 "appt_seen": {k: sorted(v) for k, v in seen.items()},
+                                 "appointments_initialized": True})
 
 
 def save_carrier(agent_id: str, carrier: str, data: bytes) -> Path:
@@ -534,7 +545,12 @@ def _auto_seed_appointments(agent_id: str, roster) -> None:
         return
     cfg = settings.get(agent_id)
     book = _book_brands(roster)
-    if not cfg.get("appointments_initialized"):
+    # Only ever full-seed a genuinely EMPTY settings record. If the agent has already
+    # configured appointments or acknowledged carriers (appt_seen), treat it as
+    # initialized even when the `appointments_initialized` flag is missing on the stored
+    # record — otherwise a lost flag makes build_book re-union the whole book on every
+    # reload and re-check carriers the agent unchecked in Settings.
+    if not (cfg.get("appointments_initialized") or cfg.get("appt_seen") or cfg.get("appointments")):
         # first upload: turn every carrier on AND record them all as acknowledged
         appts = {str(k).upper(): list(v or []) for k, v in (cfg.get("appointments") or {}).items()}
         for st, brands in book.items():
