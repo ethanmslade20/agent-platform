@@ -500,28 +500,24 @@ def _auto_seed_appointments(agent_id: str, roster) -> None:
                                  "appt_seen": {st: sorted(b) for st, b in book.items()},
                                  "appointments_initialized": True})
         return
-    # Already initialized. Agents who predate carrier tracking have no appt_seen — just
-    # acknowledge their whole CURRENT book once (don't retroactively appoint, which could
-    # resurrect a carrier they turned off before tracking existed).
-    if "appt_seen" not in cfg:
-        settings.save(agent_id, {**cfg, "appt_seen": {st: sorted(b) for st, b in book.items()}})
-        return
-    # AUTO-APPOINT genuinely-new (state, carrier) combos — ones never acknowledged in
-    # appt_seen, i.e. new business the agent has written since the first seed. These are
-    # the agent's OWN clients (require_ever_mine already scoped the book to them), so a
-    # carrier that first shows up in a later upload must NOT be silently filtered out of
-    # the active count — that undercounted Ethan's agent book by ~45 vs his personal site
-    # (whole states like LA/IA/AR/OK/WI + newer carriers in existing states). A combo the
-    # agent explicitly turned off is in appt_seen but not appointments, so it's not "new"
-    # and is left off. The Settings heads-up (new_carriers) still surfaces these too.
-    seen = {str(k).upper(): set(v or []) for k, v in (cfg.get("appt_seen") or {}).items()}
+    # Already initialized. The current book is scoped to the agent's OWN clients
+    # (require_ever_mine keeps only clients they were ever agent-of-record for), so every
+    # carrier/state in it is one they actually write. Keep appointments a SUPERSET of the
+    # current book so the appointment filter can NEVER drop an agent's own client. A
+    # carrier that was acknowledged into appt_seen but left OFF (dismissed from the
+    # new-carrier heads-up, or just never turned on) was still silently removing that
+    # agent's real clients from the active count — that undercounted Ethan's book ~45 vs
+    # his personal site (whole states LA/IA/AR/OK/WI + newer carriers elsewhere). To leave
+    # a carrier out of the book entirely, use excluded_carriers (honored downstream); the
+    # per-state appointment list is not the tool for hiding your own clients.
     appts = {str(k).upper(): set(v or []) for k, v in (cfg.get("appointments") or {}).items()}
+    seen = {str(k).upper(): set(v or []) for k, v in (cfg.get("appt_seen") or {}).items()}
     changed = False
     for st, brands in book.items():
-        fresh = {b for b in brands if b and b not in seen.get(st, set())}
-        if fresh:
-            appts[st] = appts.get(st, set()) | fresh
-            seen[st] = seen.get(st, set()) | set(brands)
+        want = {b for b in brands if b}
+        if want - appts.get(st, set()):
+            appts[st] = appts.get(st, set()) | want
+            seen[st] = seen.get(st, set()) | want
             changed = True
     if changed:
         settings.save(agent_id, {**cfg,
