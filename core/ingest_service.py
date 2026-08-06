@@ -500,11 +500,33 @@ def _auto_seed_appointments(agent_id: str, roster) -> None:
                                  "appt_seen": {st: sorted(b) for st, b in book.items()},
                                  "appointments_initialized": True})
         return
-    # Already initialized — never auto-change appointments. But if this agent predates
-    # carrier tracking, acknowledge their whole CURRENT book once, so the heads-up only
-    # ever flags carriers that appear from here on (not everything they already have).
+    # Already initialized. Agents who predate carrier tracking have no appt_seen — just
+    # acknowledge their whole CURRENT book once (don't retroactively appoint, which could
+    # resurrect a carrier they turned off before tracking existed).
     if "appt_seen" not in cfg:
         settings.save(agent_id, {**cfg, "appt_seen": {st: sorted(b) for st, b in book.items()}})
+        return
+    # AUTO-APPOINT genuinely-new (state, carrier) combos — ones never acknowledged in
+    # appt_seen, i.e. new business the agent has written since the first seed. These are
+    # the agent's OWN clients (require_ever_mine already scoped the book to them), so a
+    # carrier that first shows up in a later upload must NOT be silently filtered out of
+    # the active count — that undercounted Ethan's agent book by ~45 vs his personal site
+    # (whole states like LA/IA/AR/OK/WI + newer carriers in existing states). A combo the
+    # agent explicitly turned off is in appt_seen but not appointments, so it's not "new"
+    # and is left off. The Settings heads-up (new_carriers) still surfaces these too.
+    seen = {str(k).upper(): set(v or []) for k, v in (cfg.get("appt_seen") or {}).items()}
+    appts = {str(k).upper(): set(v or []) for k, v in (cfg.get("appointments") or {}).items()}
+    changed = False
+    for st, brands in book.items():
+        fresh = {b for b in brands if b and b not in seen.get(st, set())}
+        if fresh:
+            appts[st] = appts.get(st, set()) | fresh
+            seen[st] = seen.get(st, set()) | set(brands)
+            changed = True
+    if changed:
+        settings.save(agent_id, {**cfg,
+                                 "appointments": {k: sorted(v) for k, v in appts.items()},
+                                 "appt_seen": {k: sorted(v) for k, v in seen.items()}})
 
 
 def new_carriers(agent_id: str, roster) -> dict:
