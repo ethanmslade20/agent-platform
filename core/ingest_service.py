@@ -446,6 +446,43 @@ def build_book(agent_id: str, npn: str = "", name: str = ""):
         roster.loc[_taken, "status"] = "Cancelled"
         if "cancel_reason" in roster.columns:
             roster.loc[_taken, "cancel_reason"] = rules.REASON_TAKEN
+    # Manually-added clients: active clients the agent is AOR for but who appear in NO
+    # uploaded export — e.g. AOR-transfers "not submitted through HealthSherpa", or a
+    # state-exchange enrollment absent from the state book. Stored in
+    # settings["manual_clients"] as [{first,last,state,carrier}]. Injected LATE (after
+    # apply_agent_settings, carrier-truth, collapse and the AOR drop) so the
+    # appointment/exclusion filters and the carrier-portal lapse (they're in no portal
+    # book) can't drop them. Skips any name_key already ACTIVE in the roster (no
+    # double-count with a real upload). Guarded so a bad entry never breaks the build.
+    try:
+        _manual = settings.get(agent_id).get("manual_clients") or []
+        if _manual:
+            import pandas as _pd_m
+            from tracker.ingest import normalize_name as _nn
+            _active_keys = (set(roster.loc[roster["status"].isin(rules.ACTIVE), "name_key"].astype(str))
+                            if {"name_key", "status"}.issubset(roster.columns) else set())
+            _last = max(months.keys()) if months else ""
+            _rows = []
+            for _c in _manual:
+                _f, _l = str(_c.get("first", "")).strip(), str(_c.get("last", "")).strip()
+                if not (_f and _l):
+                    continue
+                _nk = _nn(f"{_f} {_l}")
+                if _nk in _active_keys:
+                    continue
+                _active_keys.add(_nk)
+                _rows.append({"name_key": _nk, "first_name": _f, "last_name": _l,
+                              "state": str(_c.get("state", "")).strip().upper(),
+                              "carrier": str(_c.get("carrier", "")).strip(),
+                              "status": "Effectuated", "cancel_reason": "", "term_date": _pd_m.NaT,
+                              "term_estimated": False, "portal_confirmed": True, "policy_aor": "",
+                              "ffm_app_id": "", "source": "manual", "applicant_count": 1,
+                              "net_premium": 0.0, "last_seen": _last})
+            if _rows:
+                _new = _pd_m.DataFrame(_rows).reindex(columns=roster.columns)
+                roster = _pd_m.concat([roster, _new], ignore_index=True)
+    except Exception as _e:
+        print(f"  (manual-clients injection skipped: {_e})")
     # Loss dating: every gone client (AOR-taken, verification-expired, left-book,
     # undated cancellation) that carries no cancel date gets one. We date it to the
     # month the agent's COMMISSION on them stopped (money doesn't lie) — falling back

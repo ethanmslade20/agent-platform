@@ -2153,6 +2153,50 @@ def page_settings(tenant: dict, roster) -> None:
                    f"They're left out of your book from your next build.")
         st.rerun()
 
+    # ── Manually-added clients (active, but in no upload) ───────────────────────
+    st.markdown("<br>", unsafe_allow_html=True)
+    st.markdown(_sec_head("shield", "Manually-added clients",
+                          "Active clients you're the agent of record for but who don't appear in any "
+                          "upload — e.g. a plan not submitted through HealthSherpa, or a state-exchange "
+                          "enrollment missing from the state book. One per line: First, Last, State, Carrier."),
+                unsafe_allow_html=True)
+    _man_now = "\n".join(f"{c.get('first','')}, {c.get('last','')}, {c.get('state','')}, {c.get('carrier','')}"
+                         for c in (cfg.get("manual_clients") or []))
+    _man_new = st.text_area("Manual clients", value=_man_now, key="manual_clients_ta",
+                            placeholder="Aiesha, Myers, MS, Cigna", label_visibility="collapsed", height=150)
+    if st.button("Save manual clients", key="save_manual"):
+        _lst = []
+        for ln in _man_new.splitlines():
+            parts = [p.strip() for p in ln.split(",")]
+            if len(parts) >= 4 and parts[0] and parts[1]:
+                _lst.append({"first": parts[0], "last": parts[1],
+                             "state": parts[2].upper(), "carrier": parts[3]})
+        settings.save(agent_id, {**settings.get(agent_id), "manual_clients": _lst})
+        st.success(f"Saved — {len(_lst)} manually-added client{'' if len(_lst) == 1 else 's'}. "
+                   f"They count as active from your next build (hit Refresh data).")
+        st.rerun()
+
+    # ── Clients to exclude (drop a specific person) ─────────────────────────────
+    st.markdown("<br>", unsafe_allow_html=True)
+    st.markdown(_sec_head("minus", "Clients to exclude",
+                          "Drop a specific person from your book — terminated, or taken by another "
+                          "agent. One per line: First, Last, State."), unsafe_allow_html=True)
+    _cx_now = "\n".join(f"{c.get('first','')}, {c.get('last','')}, {c.get('state','')}"
+                        for c in (cfg.get("exclusions") or []))
+    _cx_new = st.text_area("Excluded clients", value=_cx_now, key="excl_clients_ta",
+                           placeholder="Heather, Champion, AL", label_visibility="collapsed", height=150)
+    if st.button("Save excluded clients", key="save_excl_clients"):
+        _lst = []
+        for ln in _cx_new.splitlines():
+            parts = [p.strip() for p in ln.split(",")]
+            if len(parts) >= 3 and parts[0] and parts[1]:
+                _lst.append({"first": parts[0], "last": parts[1], "state": parts[2].upper()})
+            elif len(parts) == 2 and parts[0] and parts[1]:
+                _lst.append({"first": parts[0], "last": parts[1], "state": ""})
+        settings.save(agent_id, {**settings.get(agent_id), "exclusions": _lst})
+        st.success(f"Saved — {len(_lst)} excluded client{'' if len(_lst) == 1 else 's'}.")
+        st.rerun()
+
     # ── Save bar (profile) ──────────────────────────────────────────────────────
     sb1, sb2 = st.columns([3, 1])
     sb1.markdown('<div style="display:flex;align-items:center;gap:8px;color:#4ade80;font-weight:600;">'
