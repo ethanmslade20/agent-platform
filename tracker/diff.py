@@ -109,7 +109,7 @@ def compute_diff(df_a: pd.DataFrame, df_b: pd.DataFrame) -> dict:
     return {"new": new_df, "missing": missing_df, "stayed": stayed_df}
 
 
-def build_all_clients(months: dict) -> pd.DataFrame:
+def build_all_clients(months: dict, npn: str = "", name: str = "") -> pd.DataFrame:
     """
     Build a cumulative person-level roster across all months.
 
@@ -118,8 +118,14 @@ def build_all_clients(months: dict) -> pd.DataFrame:
     - carrier/status/net_premium/applicant_count = most recent active plan, or
       most recent plan if no active plan exists
     - term_date       = NaT if the person has any currently active plan;
-                        else max(term_date) across all their plans
+                        else max(term_date) across all their plans — or, for a gone
+                        person whose newest HealthSherpa plan is Terminated, that
+                        plan's coverage end (coverage_end, see below)
     - months_on_book  = calendar months from effective_date to latest snapshot month
+
+    npn / name = the logged-in agent (core.ingest_service.build_book passes the
+    tenant's), used only to tell the agent's own plan from another agent's when
+    dating a loss by coverage end. Without them, only blank-AOR rows qualify.
     """
     from tracker.ingest import match_client_id
 
@@ -158,6 +164,68 @@ def build_all_clients(months: dict) -> pd.DataFrame:
     all_df["term_date"]      = pd.to_datetime(all_df.get("term_date"),      errors="coerce")
     all_df["submission_date"] = pd.to_datetime(all_df.get("submission_date"), errors="coerce")
 
+    # COVERAGE-END loss date. HealthSherpa's date_cancelled (term_date) is the day HS
+    # PROCESSED a termination, not the day coverage ended — its Oct 7-9 2026 re-sync
+    # stamped 10/08-10/09 on plans that ended months earlier, so Re-Engage showed the
+    # whole wave as lost "<30 days" and churn landed in the wrong month.
+    # expiration_date (coverage_end) is the real last day in force. Trust it ONLY:
+    #   - in the NEWEST snapshot (snapshots ingested before this change don't carry
+    #     the column → NaT → old behavior until the agent's next upload);
+    #   - on the person's NEWEST plan there (an older plan's mid-year end must not
+    #     stand in for it);
+    #   - on Terminated rows (active and Cancelled rows carry a 12/31 default);
+    #   - when it's not another agent's policy (a stolen client's row is the OTHER
+    #     agent's plan — the AOR rules + assign_loss_months date those);
+    #   - not in the future, not a 12/31 plan-year end, not before the plan started;
+    #   - not before the start of any plan the snapshots ever showed ACTIVE (the
+    #     re-sync swapped an older, terminated policy back into some export rows).
+    _cov_raw = (pd.to_datetime(all_df["coverage_end"], errors="coerce")
+                if "coverage_end" in all_df.columns
+                else pd.Series(pd.NaT, index=all_df.index, dtype="datetime64[ns]"))
+    # "Newest" = the newest month that holds HealthSherpa rows: a state-exchange book
+    # uploaded first in a new month must not switch coverage dating off.
+    _hs_months = all_df.loc[all_df["_is_hs"].astype(bool), "month"]
+    _hs_latest = _hs_months.max() if len(_hs_months) else max(months.keys())
+    _in_latest = (all_df["month"] == _hs_latest) & all_df["_is_hs"].astype(bool)
+    # Compare against the real start day where ingest carried it (older snapshots
+    # only have the month-rounded effective_date).
+    _start = (pd.to_datetime(all_df["plan_start"], errors="coerce")
+              if "plan_start" in all_df.columns
+              else pd.Series(pd.NaT, index=all_df.index, dtype="datetime64[ns]")).fillna(all_df["effective_date"])
+    _newest_idx = (all_df.loc[_in_latest, ["_pkey", "effective_date"]]
+                   .assign(_ce=_cov_raw[_in_latest])
+                   .sort_values(["_pkey", "effective_date", "_ce"], na_position="first")
+                   .groupby("_pkey").tail(1).index)
+    _max_active_eff = all_df["_pkey"].map(
+        _start[all_df["_srank"] == 1].groupby(all_df.loc[all_df["_srank"] == 1, "_pkey"]).max())
+    _npn = str(npn or "").strip()
+    _parts = [p for p in (name or "").lower().split() if p]
+
+    def _foreign_aor(a) -> bool:
+        al = str(a or "").strip().lower()
+        if al in ("", "nan") or "none" in al:
+            return False              # blank / disconnected = still the agent's
+        if _npn and _npn in al:
+            return False
+        if _parts and all(p in al for p in _parts):
+            return False
+        return True                   # someone else (or no identity to judge by)
+
+    _foreign = (all_df["policy_aor"].apply(_foreign_aor)
+                if "policy_aor" in all_df.columns else pd.Series(False, index=all_df.index))
+    _cov_ok = (
+        _in_latest
+        & all_df.index.isin(_newest_idx)
+        & (all_df["status"] == "Terminated")
+        & ~_foreign
+        & _cov_raw.notna()
+        & (_cov_raw <= pd.Timestamp.today().normalize())
+        & ~((_cov_raw.dt.month == 12) & (_cov_raw.dt.day == 31))
+        & (_start.isna() | (_cov_raw >= _start))
+        & (_max_active_eff.isna() | (_cov_raw >= _max_active_eff))
+    )
+    all_df["_cov_end"] = _cov_raw.where(_cov_ok)
+
     # Sort: oldest month first, within same month inactive before active
     # → "last" in each group = most recent month, most active row
     all_df = all_df.sort_values(["_pkey", "month", "_srank"])
@@ -191,6 +259,7 @@ def build_all_clients(months: dict) -> pd.DataFrame:
             _term_date_last   = ("term_date",      "last"),  # most recent term_date
             _has_active       = ("_srank",         "max"),   # 1 if any active plan exists
             _has_hs           = ("_is_hs",         "max"),   # seen in any HS export?
+            _cov_end          = ("_cov_end",       "max"),   # newest plan's trusted coverage end
             **last_fields,
         )
         .reset_index()
@@ -199,9 +268,16 @@ def build_all_clients(months: dict) -> pd.DataFrame:
 
     # term_date: NaT when the person still has an active plan
     agg["term_date"] = agg["_term_date_last"].where(agg["_has_active"] == 0, other=pd.NaT)
+    # A gone person whose newest HS plan passed every coverage-end test above is dated
+    # by THAT day — ever-active clients (date blanked just above) and never-active ones
+    # (whose date_cancelled may be the re-sync stamp) alike. It's a real date, so
+    # assign_loss_months keeps it (term_estimated stays False).
+    _use_cov = agg["status"].isin(["Cancelled", "Terminated"]) & agg["_cov_end"].notna()
+    agg["coverage_end"] = agg["_cov_end"].where(_use_cov)
+    agg["term_date"] = agg["term_date"].where(~_use_cov, agg["_cov_end"])
     # source: "healthsherpa" if seen in any FFM export, else "access" (exchange-only)
     agg["source"] = agg["_has_hs"].map(lambda x: "healthsherpa" if x else "access")
-    agg = agg.drop(columns=["_term_date_last", "_has_active", "_has_hs"])
+    agg = agg.drop(columns=["_term_date_last", "_has_active", "_has_hs", "_cov_end"])
 
     # months_on_book: calendar months from effective_date to the latest snapshot month
     latest       = max(months.keys())
@@ -226,6 +302,7 @@ def build_all_clients(months: dict) -> pd.DataFrame:
         "email", "phone", "cancel_notes", "net_premium", "subsidy", "applicant_count", "first_seen", "last_seen", "last_active", "months_on_book",
         "dmi_outstanding", "dmi_expired", "svi_outstanding", "svi_expired", "followup_docs",
         "policy_aor", "last_ede_sync", "policy_number", "submission_date", "source",
+        "coverage_end",
     ]
     return agg[[c for c in cols if c in agg.columns]]
 
@@ -306,6 +383,14 @@ def assign_loss_months(all_clients: pd.DataFrame, last_paid=None) -> pd.DataFram
     fs = df.get("first_seen",  pd.Series(pd.NA, index=df.index)).astype(str)
     cur = pd.Timestamp.today().to_period("M")
 
+    # loss_basis says HOW a dateless loss was dated: "commission" (pay stopped = a
+    # confirmed month) vs "sync"/"active" (only WHEN the drop was noticed — an
+    # exchange re-sync like Oct 7-9 2026 stamps ~today on months-old losses).
+    # Re-Engage (core/views.losses) keeps sync/active rows off the outreach list;
+    # churn still counts them. "" = a real cancel date.
+    if "loss_basis" not in df.columns:
+        df["loss_basis"] = ""
+    df["loss_basis"] = df["loss_basis"].fillna("").astype(str)
     gone      = df["status"].isin(churned)
     is_switch = reason.str.contains("switch")          # plan switch = retention, skip
     has_real  = gone & term.notna() & ~est             # real carrier cancel date — keep
@@ -315,17 +400,18 @@ def assign_loss_months(all_clients: pd.DataFrame, last_paid=None) -> pd.DataFram
         p = pd.Period(mstr[:7], freq="M")
         return p if p <= cur else cur
 
-    def _set(idx, mstr):
+    def _set(idx, mstr, basis):
         df.at[idx, "term_date"] = _clamp(mstr).to_timestamp("M")
         df.at[idx, "term_estimated"] = False
+        df.at[idx, "loss_basis"] = basis
 
     for idx in df.index[need]:
         nk = _pk(fn.at[idx], ln.at[idx])
         pn = _polnorm(pol.at[idx])
         mm = by_policy.get(pn) if len(pn) >= 5 else None
-        if _valid(mm): _set(idx, mm); continue
+        if _valid(mm): _set(idx, mm, "commission"); continue
         mm = by_name.get(nk)
-        if _valid(mm): _set(idx, mm); continue
+        if _valid(mm): _set(idx, mm, "commission"); continue
         pool = by_carrier.get(_brand(carr.at[idx]), {})
         if pool and len(nk) >= 4:
             best_m, best_r = None, 0.0
@@ -333,11 +419,11 @@ def assign_loss_months(all_clients: pd.DataFrame, last_paid=None) -> pd.DataFram
                 r = difflib.SequenceMatcher(None, nk, cand_nk).ratio()
                 if r > best_r:
                     best_r, best_m = r, cand_m
-            if best_r >= 0.88 and _valid(best_m): _set(idx, best_m); continue
+            if best_r >= 0.88 and _valid(best_m): _set(idx, best_m, "commission"); continue
         if pd.notna(sync.at[idx]):
-            df.at[idx, "term_date"] = min(sync.at[idx].to_period("M"), cur).to_timestamp("M"); df.at[idx, "term_estimated"] = False; continue
+            _set(idx, sync.at[idx].strftime("%Y-%m"), "sync"); continue
         anchor = la.at[idx] if _valid(la.at[idx]) else fs.at[idx]
-        if _valid(anchor): _set(idx, anchor)
+        if _valid(anchor): _set(idx, anchor, "active")
     return df
 
 

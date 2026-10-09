@@ -314,15 +314,46 @@ def build_book(agent_id: str, npn: str = "", name: str = ""):
     months = load_all_snapshots(snap_dir)
     if not months:
         return None
-    roster = build_all_clients(months)
+    # npn/name: dating a Terminated client by their HealthSherpa coverage end must skip
+    # plans now on ANOTHER agent's policy — "another" relative to THIS tenant.
+    roster = build_all_clients(months, npn=npn, name=name)
     if roster is None or roster.empty:
         return None
     roster = rules.apply_book_rules(roster, npn, name)
     # Clients who vanished from the latest export left the book — mark Cancelled
     # (matches Ethan's site: anyone who dropped off is treated as cancelled).
     if "last_seen" in roster.columns and months:
-        latest = max(months.keys())
-        gone = (roster["last_seen"].astype(str) < latest) & roster["status"].isin(rules.ACTIVE)
+        # Judge each client against the newest upload of THEIR OWN book: HealthSherpa
+        # clients against the newest month holding a HealthSherpa export, state-exchange-
+        # only clients against the newest month holding THEIR state's book (GA and IL are
+        # uploaded separately). Otherwise a book uploaded first in a new month marks every
+        # client of the not-yet-uploaded books "Left book".
+        import pandas as _pd_lb
+        _hs_m, _acc_m = [], {}                 # HS months; state -> months with that state's book
+        for _m, _d in months.items():
+            if _d is None or _d.empty:
+                continue
+            if "source" not in _d.columns:
+                _hs_m.append(_m)               # legacy snapshots = HealthSherpa
+                continue
+            _is_acc = _d["source"].astype(str).str.lower() == "access"
+            if (~_is_acc).any():
+                _hs_m.append(_m)
+            if _is_acc.any():
+                _st = (_d.loc[_is_acc, "state"].astype(str).str.upper().str.strip()
+                       if "state" in _d.columns else _pd_lb.Series("", index=_d.index[_is_acc]))
+                for _s in set(_st):
+                    _acc_m.setdefault(_s, []).append(_m)
+        _any = max(months.keys())
+        _ref = _pd_lb.Series(max(_hs_m) if _hs_m else _any, index=roster.index)
+        if "source" in roster.columns and _acc_m:
+            _all_acc = max(max(v) for v in _acc_m.values())
+            _is_acc_r = roster["source"].astype(str).str.lower() == "access"
+            _st_r = (roster["state"].astype(str).str.upper().str.strip()
+                     if "state" in roster.columns else _pd_lb.Series("", index=roster.index))
+            _ref[_is_acc_r] = _st_r[_is_acc_r].map(
+                lambda s: max(_acc_m[s]) if s in _acc_m else _all_acc)
+        gone = (roster["last_seen"].astype(str) < _ref) & roster["status"].isin(rules.ACTIVE)
         roster.loc[gone, "status"] = "Cancelled"
         if "cancel_reason" in roster.columns:
             roster.loc[gone & (roster["cancel_reason"] == ""), "cancel_reason"] = "Left book"
@@ -395,6 +426,8 @@ def build_book(agent_id: str, npn: str = "", name: str = ""):
                     roster.loc[_se_restore, "term_date"] = _pd_se.NaT
                 if "term_estimated" in roster.columns:
                     roster.loc[_se_restore, "term_estimated"] = False
+                if "coverage_end" in roster.columns:   # their HS coverage end no longer dates a loss
+                    roster.loc[_se_restore, "coverage_end"] = _pd_se.NaT
     except Exception:
         pass  # fail-safe: a bad state-exchange book must never break the book build
     # Collapse per-state carrier entities to their brand (e.g. "Ambetter from Peach

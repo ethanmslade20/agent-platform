@@ -50,6 +50,47 @@ def losses(roster: pd.DataFrame) -> pd.DataFrame:
             ["AOR taken", "Verification expired", "Plan switch"])]
     if "term_estimated" in churned.columns:
         churned = churned[~churned["term_estimated"].apply(_as_bool)]
+    # Same for losses dated only by WHEN they were noticed (an exchange re-sync or the
+    # last snapshot that showed them) — e.g. the Oct 7-9 2026 HealthSherpa re-sync
+    # made months-old cancellations look "lost today". They still count in churn.
+    # Exception: a loss noticed within ~2 months AFTER the current plan started (and
+    # not before the last month a snapshot showed them active) can't be older than
+    # that plan, so it IS a real recent loss — keep it (e.g. a 10/1 plan cancelled
+    # 10/08). Not when the same person is still active under another row (a
+    # split-record ghost: same name AND same phone or email).
+    if "loss_basis" in churned.columns:
+        _noticed = churned["loss_basis"].fillna("").astype(str).isin(["sync", "active"])
+        if "current_effective" in churned.columns and "term_date" in churned.columns:
+            _start = pd.to_datetime(churned["current_effective"], errors="coerce")
+            _seen  = pd.to_datetime(churned["term_date"], errors="coerce")
+            _gap = _seen - _start
+            # a pending plan cancelled before it began is dated just BEFORE its start
+            _recent = (_gap >= pd.Timedelta(days=-62)) & (_gap <= pd.Timedelta(days=62))
+            if "last_active" in churned.columns:
+                _la = pd.to_datetime(churned["last_active"].astype(str).str[:7] + "-01",
+                                     format="%Y-%m-%d", errors="coerce") + pd.offsets.MonthEnd(0)
+                _recent &= _la.notna() & (_seen >= _la)
+            else:
+                _recent &= False
+            if {"first_name", "last_name", "status"}.issubset(roster.columns):
+                def _clean(d, c):
+                    return (d[c].fillna("").astype(str).str.strip().str.lower()
+                            if c in d.columns else pd.Series("", index=d.index))
+                def _nm(d):
+                    return _clean(d, "first_name") + "|" + _clean(d, "last_name")
+                def _ph(d):
+                    p = _clean(d, "phone").str.replace(r"\.0$", "", regex=True)
+                    return p.str.extract(r"(\d[\d\s().+-]{8,}\d)", expand=False).fillna("") \
+                            .str.replace(r"[^0-9]", "", regex=True).str[-10:]
+                _act = roster[~roster["status"].isin(LOST)]   # incl. Unknown: still on the book
+                _twins = (set(zip(_nm(_act), _ph(_act))) | set(zip(_nm(_act), _clean(_act, "email"))))
+                _twins = {t for t in _twins if t[1]}
+                _ghost = pd.Series([(n, p) in _twins or (n, e) in _twins
+                                    for n, p, e in zip(_nm(churned), _ph(churned), _clean(churned, "email"))],
+                                   index=churned.index)
+                _recent &= ~_ghost
+            _noticed &= ~_recent.fillna(False)
+        churned = churned[~_noticed]
     return churned.copy()
 
 

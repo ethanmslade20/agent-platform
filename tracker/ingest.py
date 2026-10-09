@@ -44,6 +44,9 @@ EXTRA_COLS = [
     "created_date",
     "date_effectuated",
     "term_date",
+    # HealthSherpa expiration_date = the real coverage-end date (see diff.build_all_clients)
+    "coverage_end",
+    "plan_start",
     "agent",
     "email",
     "phone",
